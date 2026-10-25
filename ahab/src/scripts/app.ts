@@ -118,11 +118,9 @@ async function api<T = any>(
     credentials: "same-origin",
     cache: "no-store",
   });
-  const payload: any = await response
-    .json()
-    .catch(() => ({
-      error: "The server returned an unreadable response. Try again.",
-    }));
+  const payload: any = await response.json().catch(() => ({
+    error: "The server returned an unreadable response. Try again.",
+  }));
   if (!response.ok)
     throw new Error(
       typeof payload.error === "string"
@@ -137,6 +135,37 @@ const showError = (error: unknown) =>
   error instanceof Error
     ? error.message
     : "This request could not be completed. Try again.";
+
+// Recheck server auth when history or another tab may have changed the session.
+// Cookies remain HttpOnly; only the signed-in boolean is compared in the browser.
+let checkingSession = false;
+async function refreshSessionNavigation() {
+  const rendered = document.body.dataset.sessionState;
+  if (
+    checkingSession ||
+    !navigator.onLine ||
+    document.visibilityState !== "visible" ||
+    !rendered ||
+    rendered === "offline"
+  )
+    return;
+  checkingSession = true;
+  try {
+    const { user } = await api<{ user: unknown }>("/api/auth/me");
+    if ((rendered === "authenticated") !== !!user) location.reload();
+  } catch {
+  } finally {
+    checkingSession = false;
+  }
+}
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted && navigator.onLine) location.reload();
+});
+window.addEventListener("focus", () => void refreshSessionNavigation());
+document.addEventListener(
+  "visibilitychange",
+  () => void refreshSessionNavigation(),
+);
 function nextPath() {
   const requested = new URLSearchParams(location.search).get("next");
   try {
@@ -504,7 +533,8 @@ async function initializePurchases() {
       ? config.usdcEnabled
         ? "Secure checkout with Stripe. Eligible card and USDC options are shown at checkout."
         : "Secure checkout with Stripe. Available payment methods are shown at checkout."
-      : (config.checkoutReason || "Checkout is temporarily unavailable. Please try again shortly.");
+      : config.checkoutReason ||
+        "Checkout is temporarily unavailable. Please try again shortly.";
     $$<HTMLButtonElement>("[data-checkout]").forEach((button) => {
       button.disabled = !checkoutEnabled;
       button.innerHTML = checkoutEnabled

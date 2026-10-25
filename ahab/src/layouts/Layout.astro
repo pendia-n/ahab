@@ -8,6 +8,7 @@ interface Props {
   app?: boolean;
   active?: string;
   protect?: boolean;
+  sessionNeutral?: boolean;
 }
 const {
   title = "Your next great take",
@@ -15,6 +16,7 @@ const {
   app = false,
   active = "",
   protect = false,
+  sessionNeutral = false,
 } = Astro.props;
 const user = (Astro.locals as any).user;
 if (protect && !user)
@@ -50,7 +52,13 @@ const navigation = [
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>{title} · Ahab</title>
   </head>
-  <body class:list={{ "app-body": app }} data-page={active}>
+  <body
+    class:list={{ "app-body": app }}
+    data-page={active}
+    data-session-state={
+      sessionNeutral ? "offline" : user ? "authenticated" : "guest"
+    }
+  >
     <a class="skip-link" href="#main">
       Skip to content
     </a>
@@ -137,7 +145,7 @@ const navigation = [
             <a href="/announcements">What’s new</a>
           </nav>
           <div class="header-actions">
-            {user ? (
+            {user || sessionNeutral ? (
               <a href="/studio" class="button primary small">
                 Open studio <Icon name="arrow" size={16} />
               </a>

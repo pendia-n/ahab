@@ -1,19 +1,14 @@
 import { defineMiddleware } from "astro:middleware";
 import { env } from "cloudflare:workers";
-import { getUser } from "./lib/auth";
+import { pageSession } from "./lib/page-session";
 import type { AhabEnv } from "./lib/types";
 export const onRequest = defineMiddleware(async (context, next) => {
   const path = context.url.pathname;
-  context.locals.user = null;
-  if (/^\/(studio|library|purchases|profile|security)(\/|$)/.test(path)) {
-    context.locals.user = await getUser(
-      context.request,
-      env as unknown as AhabEnv,
-    );
-    if (!context.locals.user)
-      return context.redirect("/signin?next=" + encodeURIComponent(path));
-  }
-  const response = await next();
+  const session = await pageSession(context.request, env as unknown as AhabEnv);
+  context.locals.user = session.user;
+  const response = session.redirect
+    ? context.redirect(session.redirect)
+    : await next();
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-Frame-Options", "DENY");
@@ -23,12 +18,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   );
   if (context.request.url.startsWith("https:"))
     response.headers.set("Strict-Transport-Security", "max-age=31536000");
-  if (
-    path.startsWith("/api/") ||
-    /^\/(studio|library|purchases|profile|security|signin|signup|recovery)/.test(
-      path,
-    )
-  )
+  if (path.startsWith("/api/") || session.sessionAware)
     response.headers.set("Cache-Control", "private, no-store");
+  if (session.sessionAware) {
+    const vary = new Set(
+      (response.headers.get("Vary") || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean),
+    );
+    vary.add("Cookie");
+    vary.add("Authorization");
+    response.headers.set("Vary", [...vary].join(", "));
+  }
   return response;
 });

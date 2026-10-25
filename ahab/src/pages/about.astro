@@ -1,6 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Icon from "../components/Icon.astro";
+const user = Astro.locals.user;
 ---
 
 <Layout title="A little studio, a lot of you">
@@ -49,7 +50,7 @@ import Icon from "../components/Icon.astro";
       </p>
     </div>
     <div class="button-row" style="margin-top:30px">
-      <a href="/signup" class="button primary">
+      <a href={user ? "/studio" : "/signup"} class="button primary">
         Start creating <Icon name="arrow" size={17} />
       </a>
       <a href="/pricing" class="button secondary">
