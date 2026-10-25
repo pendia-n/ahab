@@ -23,7 +23,7 @@
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
   "vars": {
-    "APP_URL": "https://ahab.pendia.workers.dev",
+    "APP_URL": "https://ahab.pendia-community.workers.dev",
     "GENERATION_ENABLED": "false",
     "CHECKOUT_ENABLED": "false",
     "USDC_ENABLED": "false",

@@ -70,3 +70,7 @@ Workflow callbacks claim queued submissions atomically before making a paid requ
 Unit/integration tests use real in-memory SQLite and mocked OpenRouter/Stripe events. Live money movement, real USDC checkout and paid OpenRouter generation require separate controlled acceptance tests and an explicit spending cap. A passing build or deployed health route does not establish those transactions work.
 
 Official contracts: [OpenRouter video API](https://openrouter.ai/docs/guides/overview/multimodal/video-generation), [provider options](https://openrouter.ai/docs/cookbook/video-generation/provider-specific-video-options), [image API](https://openrouter.ai/docs/guides/overview/multimodal/image-generation), [Stripe stablecoins](https://docs.stripe.com/payments/stablecoin-payments), [Cloudflare Workflows](https://developers.cloudflare.com/workflows/).
+
+## Release verification
+
+Deployed at https://ahab.pendia-community.workers.dev. All 62 automated tests pass, Astro reports no diagnostics, and the production build succeeds. A real local browser verified signup, 270-day cookie flags, private image upload/ranges, prompt save/deletion, recovery, desktop/tablet/mobile layouts and offline behavior. Paid provider calls and real Stripe/USDC transactions have not been run. Checkout and generation remain disabled pending the launch configuration above.
