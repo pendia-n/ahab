@@ -1,6 +1,6 @@
-const CACHE = "ahab-public-v2";
+const CACHE = "ahab-public-v3";
 const STATIC = [
-  "/offline",
+  "/offline/",
   "/ahab.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
@@ -36,7 +36,17 @@ self.addEventListener("fetch", (event) => {
     return;
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("/offline")),
+      fetch(event.request).catch(async () => {
+        const cached = await caches.match("/offline/");
+        // A cached redirect from /offline to /offline/ cannot be returned to a
+        // navigation request in production. Strip response redirect metadata.
+        return cached
+          ? new Response(cached.body, { status: 200, headers: cached.headers })
+          : new Response("Your studio needs a connection.", {
+              status: 503,
+              headers: { "Content-Type": "text/plain; charset=utf-8" },
+            });
+      }),
     );
     return;
   }
