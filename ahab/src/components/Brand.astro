@@ -1,0 +1,10 @@
+---
+const { compact = false } = Astro.props;
+---
+
+<a class:list={["brand", { compact }]} href="/" aria-label="Ahab home">
+  <img src="/ahab.svg" alt="" width="44" height="44" />
+  <span>
+    ahab<span class="brand-dot">.</span>
+  </span>
+</a>

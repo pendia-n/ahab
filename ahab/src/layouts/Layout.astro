@@ -1,23 +1,184 @@
+---
+import Brand from "../components/Brand.astro";
+import Icon from "../components/Icon.astro";
+import "../styles/global.css";
+interface Props {
+  title?: string;
+  description?: string;
+  app?: boolean;
+  active?: string;
+  protect?: boolean;
+}
+const {
+  title = "Your next great take",
+  description = "Create personal AI presenter and short scene videos with Ahab. Your face, your script, your next take.",
+  app = false,
+  active = "",
+  protect = false,
+} = Astro.props;
+const user = (Astro.locals as any).user;
+if (protect && !user)
+  return Astro.redirect(
+    "/signin?next=" + encodeURIComponent(Astro.url.pathname),
+  );
+const navigation = [
+  { name: "Create", href: "/studio", icon: "create", key: "create" },
+  { name: "Library", href: "/library", icon: "library", key: "library" },
+  {
+    name: "Purchases",
+    href: "/purchases",
+    icon: "purchases",
+    key: "purchases",
+  },
+  { name: "Account", href: "/profile", icon: "account", key: "account" },
+];
+---
+
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
-	</head>
-	<body>
-		<slot />
-	</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f1f7fc" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>{title} · Ahab</title>
+  </head>
+  <body class:list={{ "app-body": app }} data-page={active}>
+    <a class="skip-link" href="#main">
+      Skip to content
+    </a>
+    {app ? (
+      <>
+        <aside class="sidebar">
+          <Brand />
+          <div class="workspace-label">YOUR CREATIVE SPACE</div>
+          <nav aria-label="Main navigation">
+            {navigation.map((item) => (
+              <a
+                href={item.href}
+                class:list={["nav-item", { active: active === item.key }]}
+                aria-current={active === item.key ? "page" : undefined}
+              >
+                <Icon name={item.icon} />
+                <span>{item.name}</span>
+                {active === item.key && <span class="nav-dot" />}
+              </a>
+            ))}
+          </nav>
+          <div class="sidebar-bottom">
+            <div class="sidebar-note">
+              <Icon name="spark" />
+              <p>
+                A fresh take
+                <br />
+                <strong>starts with you.</strong>
+              </p>
+            </div>
+            <a href="/about" class="quiet-link">
+              About Ahab <Icon name="arrow" size={15} />
+            </a>
+            <a href="/security" class="quiet-link">
+              Security <Icon name="lock" size={15} />
+            </a>
+            <button class="quiet-link" data-install hidden>
+              Install Ahab <Icon name="download" size={15} />
+            </button>
+            <a class="user-chip" href="/profile">
+              <span class="user-initial">
+                {user?.username?.slice(0, 1).toUpperCase() || "A"}
+              </span>
+              <span>
+                <strong>{user?.username || "Your account"}</strong>
+                <small>Your private studio</small>
+              </span>
+            </a>
+          </div>
+        </aside>
+        <header class="app-topbar">
+          <Brand />
+          <nav aria-label="Tablet navigation">
+            {navigation.map((item) => (
+              <a href={item.href} class:list={{ active: active === item.key }}>
+                {item.name}
+              </a>
+            ))}
+          </nav>
+          <a class="round-button" href="/profile" aria-label="Your account">
+            <Icon name="account" />
+          </a>
+        </header>
+        <nav class="bottom-nav" aria-label="Mobile navigation">
+          {navigation.map((item) => (
+            <a
+              href={item.href}
+              class:list={{ active: active === item.key }}
+              aria-current={active === item.key ? "page" : undefined}
+            >
+              <Icon name={item.icon} />
+              <span>{item.name}</span>
+            </a>
+          ))}
+        </nav>
+      </>
+    ) : (
+      <header class="site-header">
+        <div class="container header-inner">
+          <Brand />
+          <nav aria-label="Main navigation">
+            <a href="/pricing">Pricing</a>
+            <a href="/about">How it works</a>
+            <a href="/announcements">What’s new</a>
+          </nav>
+          <div class="header-actions">
+            {user ? (
+              <a href="/studio" class="button primary small">
+                Open studio <Icon name="arrow" size={16} />
+              </a>
+            ) : (
+              <>
+                <a href="/signin" class="sign-in-link">
+                  Sign in
+                </a>
+                <a href="/signup" class="button primary small">
+                  Start creating <Icon name="arrow" size={16} />
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+    )}
+    <main id="main" tabindex="-1" class:list={[app ? "app-main" : "site-main"]}>
+      <slot />
+    </main>
+    <footer class:list={["site-footer", { "app-footer": app }]}>
+      <div class="footer-inner">
+        <div>
+          <Brand />
+          <p>Make something that sounds like you.</p>
+        </div>
+        <nav aria-label="Footer navigation">
+          <a href="/pricing">Pricing</a>
+          <a href="/about">About</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </nav>
+        <small>© {new Date().getFullYear()} Ahab</small>
+      </div>
+    </footer>
+    <div class="toast" role="status" aria-live="polite" hidden></div>
+    <div class="offline-banner" role="status" hidden>
+      You’re offline. Connect to load your studio, make videos or check out.
+    </div>
+    <script>
+      import "../scripts/app";
+    </script>
+  </body>
 </html>
-
-<style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
-</style>

@@ -1,2 +1,5 @@
 _worker.js
 _routes.json
+.env*
+.dev.vars*
+server/

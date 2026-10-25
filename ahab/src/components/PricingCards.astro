@@ -1,0 +1,92 @@
+---
+import Icon from "./Icon.astro";
+const { signedIn = false, purchase = false } = Astro.props;
+const packages = [
+  {
+    id: "starter",
+    name: "First take",
+    price: 11,
+    videos: 1,
+    duration: 30,
+    portraits: 1,
+    detail: "A little idea. A finished video.",
+  },
+  {
+    id: "studio",
+    name: "Creator set",
+    price: 22,
+    videos: 3,
+    duration: 80,
+    portraits: 3,
+    detail: "Make a few hooks your own.",
+    featured: true,
+  },
+  {
+    id: "campaign",
+    name: "Campaign set",
+    price: 47,
+    videos: 5,
+    duration: 120,
+    portraits: 5,
+    detail: "More room for your next launch.",
+  },
+];
+---
+
+<div class="pricing-grid">
+  {packages.map((pack) => (
+    <article class:list={["price-card", { featured: pack.featured }]}>
+      {pack.featured && <span class="price-flag">For your first batch</span>}
+      <h3>{pack.name}</h3>
+      <p class="muted">{pack.detail}</p>
+      <p class="price">
+        <span>$</span>
+        {pack.price}
+        <small>USD · one time</small>
+      </p>
+      <ul class="feature-list">
+        <li>
+          <Icon name="check" />
+          {pack.videos} video generation{pack.videos > 1 ? "s" : ""}
+        </li>
+        <li>
+          <Icon name="check" />
+          Up to {pack.duration}s per presenter video
+        </li>
+        <li>
+          <Icon name="check" />
+          {pack.portraits} AI portrait{pack.portraits > 1 ? "s" : ""}
+        </li>
+        <li>
+          <Icon name="check" />
+          720p presenter · 768p scene
+        </li>
+        <li>
+          <Icon name="check" />
+          Your allowance never expires
+        </li>
+      </ul>
+      {purchase ? (
+        <button
+          class:list={["button", pack.featured ? "primary" : "secondary"]}
+          data-checkout={pack.id}
+          disabled
+        >
+          Checking availability…
+          <Icon name="arrow" size={17} />
+        </button>
+      ) : (
+        <a
+          class:list={["button", pack.featured ? "primary" : "secondary"]}
+          href={signedIn ? "/purchases" : "/signup"}
+        >
+          Choose {pack.name.toLowerCase()}
+          <Icon name="arrow" size={17} />
+        </a>
+      )}
+      <p class="fine-print">
+        Scene videos are 5–15 seconds and use one video allowance.
+      </p>
+    </article>
+  ))}
+</div>

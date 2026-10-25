@@ -1,0 +1,146 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeading from "../components/PageHeading.astro";
+import Icon from "../components/Icon.astro";
+const user = (Astro.locals as any).user;
+---
+
+<Layout title="Keep your space yours" app protect active="account">
+  <PageHeading
+    eyebrow="YOUR ACCOUNT SECURITY"
+    title="Keep your space yours."
+    description="Update your password or set a recovery passcode for a way back in."
+  />
+  <div class="account-grid">
+    <section class="panel">
+      <form class="setting-form" data-security="password">
+        <h3>Change your password</h3>
+        <div class="field">
+          <label for="current-password">Current password</label>
+          <input
+            id="current-password"
+            name="currentPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="new-password">New password</label>
+          <div class="password-visibility">
+            <input
+              id="new-password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="7"
+              maxlength="18"
+              required
+            />
+            <button
+              type="button"
+              data-password-toggle="new-password"
+              aria-label="Show password"
+            >
+              Show
+            </button>
+          </div>
+          <p class="field-help">
+            7–18 characters, including a letter and a number.
+          </p>
+        </div>
+        <button class="button primary small" type="submit">
+          Save new password <Icon name="check" size={15} />
+        </button>
+        <p class="field-help" style="margin-top:15px">
+          For account protection, you can change your password up to four times
+          in a rolling 24 hours.
+        </p>
+        <p class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      <form class="setting-form" data-security="passcode">
+        <h3>
+          {user?.recoveryEnabled
+            ? "Update your recovery passcode"
+            : "Set a recovery passcode"}
+        </h3>
+        <div class="field">
+          <label for="passcode-password">Current password</label>
+          <input
+            id="passcode-password"
+            name="currentPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="new-passcode">New recovery passcode</label>
+          <input
+            id="new-passcode"
+            name="passcode"
+            type="password"
+            autocomplete="off"
+            minlength="8"
+            maxlength="8"
+            pattern="[a-z0-9]{8}"
+            required
+          />
+          <p class="field-help">
+            Exactly 8 lowercase letters or numbers. Save it somewhere safe; Ahab
+            cannot show it to you later.
+          </p>
+        </div>
+        <button class="button secondary small" type="submit">
+          Save recovery passcode <Icon name="check" size={15} />
+        </button>
+        <p class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      {user?.recoveryEnabled && (
+        <form class="setting-form" data-security="remove">
+          <h3>Remove recovery passcode</h3>
+          <p class="field-help" style="margin-bottom:15px">
+            Without a passcode, signed-out account recovery is unavailable.
+          </p>
+          <div class="field">
+            <label for="remove-password">Current password</label>
+            <input
+              id="remove-password"
+              name="currentPassword"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button class="button danger small" type="submit">
+            Remove passcode
+          </button>
+          <p class="form-status" role="status" aria-live="polite"></p>
+        </form>
+      )}
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>A way back to your work</h2>
+        <Icon name="lock" size={20} />
+      </div>
+      <p class="muted" style="font-size:13px">
+        A recovery passcode is optional. It lets you reset your password while
+        signed out, using your username and the passcode.
+      </p>
+      <p class="muted" style="font-size:13px">
+        Password resets end existing sessions. Sign out on shared devices, and
+        keep your passcode separate from your password.
+      </p>
+      <div class="notice" style="margin-top:23px">
+        <p>
+          Ahab does not collect an email address for recovery. Your username and
+          passcode are your signed-out recovery method.
+        </p>
+      </div>
+      <a class="quiet-link" href="/profile" style="padding:20px 0 0">
+        Back to your account <Icon name="arrow" size={15} />
+      </a>
+    </section>
+  </div>
+</Layout>

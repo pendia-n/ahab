@@ -1,0 +1,42 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeading from "../components/PageHeading.astro";
+import PricingCards from "../components/PricingCards.astro";
+import Icon from "../components/Icon.astro";
+---
+
+<Layout title="Your creative budget" app protect active="purchases">
+  <PageHeading
+    eyebrow="YOUR PROJECT. YOUR PACE."
+    title="A little creative budget."
+    description="One-time packages. Separate video takes. Unused allowances never expire."
+  />
+  <div id="purchase-message" class="notice checkout-notice" hidden></div>
+  <section id="your-allowances" hidden>
+    <h2 class="subheading" style="margin-top:0">
+      Ready for your next idea
+    </h2>
+    <div id="allowance-cards" class="allowance-grid"></div>
+  </section>
+  <div class="notice checkout-notice" id="checkout-availability">
+    <Icon name="lock" size={18} />
+    <p>Checking payment availability…</p>
+  </div>
+  <PricingCards purchase />
+  <p class="fine-print" style="margin-top:20px">
+    Prices are in USD. Purchases are final, subject to applicable law. Confirmed
+    generation failures restore the relevant generation allowance. A successful
+    portrait is charged separately to your portrait allowance.
+  </p>
+  <h2 class="subheading">Your purchases</h2>
+  <p class="receipt-note">
+    A payment return page does not confirm payment. Allowances appear after
+    payment is verified.
+  </p>
+  <div class="panel table-wrap" id="purchase-history">
+    <p class="loading-text">
+      <span class="spinner"></span>Loading your purchase history…
+    </p>
+  </div>
+  <p class="form-status" id="purchase-error" role="alert"></p>
+</Layout>

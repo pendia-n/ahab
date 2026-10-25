@@ -1,0 +1,97 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PricingCards from "../components/PricingCards.astro";
+import Icon from "../components/Icon.astro";
+---
+
+<Layout title="Simple, one-time pricing">
+  <section class="section public-pricing">
+    <div class="container">
+      <div class="section-heading center">
+        <p class="eyebrow">MAKE ROOM FOR YOUR NEXT IDEA</p>
+        <h1>
+          A small price for
+          <br />
+          your next great take.
+        </h1>
+        <p class="lede">
+          Buy only what you need. No subscription.
+          <br />
+          Unused video and portrait allowances never expire.
+        </p>
+      </div>
+      <PricingCards signedIn={!!(Astro.locals as any).user} />
+      <div class="notice">
+        <Icon name="info" />
+        <p>
+          Each package includes separate video generations with the stated
+          maximum duration for each presenter video. Short scenes are always
+          5–15 seconds. A successful AI portrait uses one portrait allowance
+          even if a later video generation fails.
+        </p>
+      </div>
+    </div>
+  </section>
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="section-heading center">
+        <h2>A few things to know</h2>
+      </div>
+      <div class="faq-list">
+        <details open>
+          <summary>What happens if a generation fails?</summary>
+          <p>
+            A confirmed failed generation restores your video allowance. If the
+            provider’s status is uncertain, we reconcile it first so you are not
+            charged for a duplicate submission. Creative choices in an otherwise
+            successful video are not a technical failure.
+          </p>
+        </details>
+        <details>
+          <summary>Can I use my own face and voice?</summary>
+          <p>
+            Yes. Presenter videos need one face image. You can use a supported
+            AI voice or upload WAV/MP3 narration within your package’s duration.
+            Only use faces and recordings you have permission to use.
+          </p>
+        </details>
+        <details>
+          <summary>What is saved in my library?</summary>
+          <p>
+            Up to 80 saved prompts, 40 images, 20 audio files, 10 video
+            references and 23 generated videos per account. Older items are
+            removed first. Generated videos also expire after 121 days, so
+            download the ones you want to keep.
+          </p>
+        </details>
+        <details>
+          <summary>Are payments refundable?</summary>
+          <p>
+            Purchases are final and we do not offer voluntary cash refunds. This
+            does not limit rights that cannot be excluded under applicable law.
+            Confirmed technical failures restore the generation allowance.
+          </p>
+        </details>
+        <details>
+          <summary>Does a long package make every video long?</summary>
+          <p>
+            No. Your package sets the maximum duration for each presenter video.
+            You can create shorter videos. Short scenes remain 5–15 seconds and
+            consume one video allowance.
+          </p>
+        </details>
+        <details>
+          <summary>
+            Can you guarantee exact product actions or ad results?
+          </summary>
+          <p>
+            No. AI video can vary, especially when handling objects, matching a
+            reference or expressing a reaction. Ahab is a creative production
+            tool; review the finished output and any product claims before
+            publishing.
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+</Layout>

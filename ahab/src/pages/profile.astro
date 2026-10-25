@@ -1,0 +1,91 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeading from "../components/PageHeading.astro";
+import Icon from "../components/Icon.astro";
+const user = (Astro.locals as any).user;
+---
+
+<Layout title="Your account" app protect active="account">
+  <PageHeading
+    eyebrow="YOUR OWN LITTLE SPACE"
+    title="Your account."
+    description="A few details that keep your creative space yours."
+  />
+  <div class="account-grid">
+    <section class="panel">
+      <div class="profile-avatar">
+        {user?.username?.slice(0, 1).toUpperCase() || "A"}
+      </div>
+      <h2 style="font-size:24px;margin-bottom:20px">
+        {user?.username || "Your account"}
+      </h2>
+      <dl class="detail-list">
+        <div>
+          <dt>Username</dt>
+          <dd>{user?.username}</dd>
+        </div>
+        <div>
+          <dt>Recovery passcode</dt>
+          <dd>{user?.recoveryEnabled ? "Enabled" : "Not set"}</dd>
+        </div>
+        <div>
+          <dt>Session</dt>
+          <dd>Up to 270 days</dd>
+        </div>
+      </dl>
+      <div class="button-row" style="margin-top:25px">
+        <a class="button secondary small" href="/security">
+          <Icon name="lock" size={15} />
+          Security settings
+        </a>
+        <button class="button ghost small" data-logout>
+          <Icon name="logout" size={15} />
+          Sign out
+        </button>
+      </div>
+      <p class="form-status" id="account-status" role="status"></p>
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your private studio</h2>
+        <Icon name="shield" size={20} />
+      </div>
+      <p class="muted" style="font-size:13px">
+        Your saved media is private to your account. Your browser uses a secure
+        session cookie to keep you signed in.
+      </p>
+      {!user?.recoveryEnabled && (
+        <div class="notice warn" style="margin-top:20px">
+          <p>
+            You haven’t set a recovery passcode. If you forget your password and
+            are signed out everywhere, you cannot recover your account. Set one
+            in Security.
+          </p>
+        </div>
+      )}
+      <h3 style="font-family:inherit;font-size:14px;letter-spacing:0;margin-top:26px">
+        Make room for your work
+      </h3>
+      <p class="muted" style="font-size:12px;margin-top:10px">
+        Review your library and download finished videos before their 121-day
+        expiry.
+      </p>
+      <a
+        href="/library"
+        class="text-link"
+        style="font-size:12px;display:inline-block;margin-top:15px"
+      >
+        Open your library
+      </a>
+      <button
+        class="button secondary small full"
+        data-install
+        hidden
+        style="margin-top:22px"
+      >
+        <Icon name="download" size={15} />
+        Install Ahab
+      </button>
+    </section>
+  </div>
+</Layout>

@@ -1,14 +1,41 @@
 {
-	"$schema": "./node_modules/wrangler/config-schema.json",
-	"compatibility_date": "2026-10-19",
-	"compatibility_flags": ["global_fetch_strictly_public"],
-	"name": "ahab",
-	"main": "@astrojs/cloudflare/entrypoints/server",
-	"assets": {
-		"directory": "./dist",
-		"binding": "ASSETS"
-	},
-	"observability": {
-		"enabled": true
-	}
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "name": "ahab",
+  "main": "./src/worker.ts",
+  "account_id": "3b5311e03e628e3ff49cbcdfac1e3dbe",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ahab-db",
+      "database_id": "db2d0bab-6020-452a-bef1-4d2f038a820f",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "ahab-media" }],
+  "workflows": [
+    {
+      "binding": "GENERATION",
+      "name": "ahab-generation",
+      "class_name": "GenerationWorkflow",
+    },
+  ],
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": {
+    "APP_URL": "https://ahab.pendia.workers.dev",
+    "GENERATION_ENABLED": "false",
+    "CHECKOUT_ENABLED": "false",
+    "USDC_ENABLED": "false",
+    "AHAB_AVATAR_MAX_SECONDS_VERIFIED": "0",
+    "AHAB_AVATAR_VOICES": "[]",
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false },
+  },
 }

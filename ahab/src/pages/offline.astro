@@ -1,0 +1,29 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
+export const prerender = true;
+---
+
+<Layout title="You’re offline">
+  <article
+    class="content-page"
+    style="text-align:center;padding-top:90px;padding-bottom:120px"
+  >
+    <img
+      src="/ahab.svg"
+      alt=""
+      width="110"
+      height="110"
+      style="margin-bottom:25px"
+    />
+    <h1>Your studio needs a connection.</h1>
+    <p style="max-width:430px;margin:20px auto 28px">
+      Connect to the internet to sign in, load your private library, make videos
+      or check out. Your private pages and media are not stored in the offline
+      cache.
+    </p>
+    <a class="button primary" href="/studio">
+      Try again <Icon name="arrow" size={17} />
+    </a>
+  </article>
+</Layout>

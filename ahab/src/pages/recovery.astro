@@ -1,0 +1,106 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
+---
+
+<Layout title="Recover your account">
+  <section class="auth-page">
+    <div class="auth-copy">
+      <p class="eyebrow">BACK TO YOUR CREATIVE SPACE</p>
+      <h1>
+        A fresh password.
+        <br />
+        The same studio.
+      </h1>
+      <p>
+        Use the recovery passcode you saved to set a new password. For your
+        privacy, a passcode is needed to recover an account while signed out.
+      </p>
+      <img
+        class="auth-mascot"
+        src="/ahab.svg"
+        alt=""
+        width="160"
+        height="165"
+      />
+    </div>
+    <div class="auth-card">
+      <h2>Recover your account</h2>
+      <p class="muted">First, verify your username and passcode.</p>
+      <form id="recovery-verify">
+        <div class="auth-step">Step 1 of 2 · Verify it’s you</div>
+        <div class="field">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            autocomplete="username"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="passcode">Recovery passcode</label>
+          <input
+            id="passcode"
+            name="passcode"
+            type="password"
+            minlength="8"
+            maxlength="8"
+            pattern="[a-z0-9]{8}"
+            autocomplete="off"
+            required
+          />
+          <p class="field-help">
+            The 8 lowercase letters or numbers you saved.
+          </p>
+        </div>
+        <button class="button primary full" type="submit">
+          Verify passcode <Icon name="arrow" size={17} />
+        </button>
+        <p class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      <form id="recovery-reset" hidden>
+        <div class="auth-step">Step 2 of 2 · Choose a new password</div>
+        <div class="field">
+          <label for="password">New password</label>
+          <div class="password-visibility">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              minlength="7"
+              maxlength="18"
+              autocomplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              data-password-toggle="password"
+              aria-label="Show password"
+            >
+              Show
+            </button>
+          </div>
+          <p class="field-help">
+            7–18 characters, including a letter and a number.
+          </p>
+        </div>
+        <button class="button primary full" type="submit">
+          Save new password <Icon name="check" size={17} />
+        </button>
+        <p class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      <p class="form-footnote">
+        Didn’t set up a passcode? Signed-out recovery is unavailable. If you are
+        still signed in on another device, visit{" "}
+        <a class="text-link" href="/security">
+          Security
+        </a>{" "}
+        there.
+      </p>
+      <div class="auth-links">
+        <a href="/signin">Back to sign in</a>
+      </div>
+    </div>
+  </section>
+</Layout>

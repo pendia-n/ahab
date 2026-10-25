@@ -1,0 +1,62 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Your privacy">
+  <article class="content-page">
+    <p class="eyebrow">YOUR STUDIO, YOUR MATERIALS</p>
+    <h1>Your privacy</h1>
+    <p class="privacy-meta">Effective 25 October 2026</p>
+    <p>
+      Ahab stores the information needed to provide your account, generation
+      service, payments and private library. Do not upload sensitive personal
+      material that is unnecessary for your project.
+    </p>
+    <h2>What is stored</h2>
+    <p>
+      Your account includes your username, password hash, optional separately
+      hashed recovery passcode and session records. Your library includes saved
+      prompts, images, audio and video references, generated outputs and related
+      metadata. Purchase and generation records support payment verification,
+      allowances and troubleshooting.
+    </p>
+    <h2>Library limits and deletion</h2>
+    <p>
+      Each account keeps up to 80 prompts, 40 images, 20 audio uploads, 10 video
+      references and 23 generated videos. Adding a new item beyond a category’s
+      limit removes its oldest item. Generated videos also expire after 121
+      days. You can delete individual saved items from your library. Temporary
+      processing copies and queued deletion retries may take additional time to
+      clear.
+    </p>
+    <h2>Services used to deliver Ahab</h2>
+    <p>
+      Cloudflare hosts the application, account data and private media.
+      OpenRouter and the selected model provider process the scripts and
+      references you submit for generation. Their own service and retention
+      terms apply to processing outside Ahab. Stripe handles checkout and
+      payment details. Ahab does not store your card information.
+    </p>
+    <h2>Private access and cookies</h2>
+    <p>
+      Your media library requires account authorization. A secure, HTTP-only
+      session cookie keeps you signed in for up to 270 days. Provider access
+      links are time-limited. The installed app caches public static resources
+      for its offline screen; it does not intentionally cache your authenticated
+      pages, private media or API responses.
+    </p>
+    <h2>Keeping your account safe</h2>
+    <p>
+      You can change your password or optional recovery passcode in Security,
+      sign out to revoke your session, and delete saved library items. Password
+      resets revoke existing sessions. If no recovery passcode is set,
+      signed-out account recovery is unavailable.
+    </p>
+    <h2>Questions</h2>
+    <p>
+      For a purchase or privacy issue, use the merchant contact details on your
+      Stripe receipt. Include your username or purchase reference without
+      sharing your password or recovery passcode.
+    </p>
+  </article>
+</Layout>

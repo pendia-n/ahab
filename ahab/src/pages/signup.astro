@@ -1,0 +1,121 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
+if ((Astro.locals as any).user) return Astro.redirect("/studio");
+---
+
+<Layout title="Make room for your ideas">
+  <section class="auth-page">
+    <div class="auth-copy">
+      <p class="eyebrow">YOUR FIRST TAKE STARTS HERE</p>
+      <h1>
+        A little idea.
+        <br />A space to make it.
+      </h1>
+      <p>
+        Create an account to save your references, write your next script and
+        make a video that feels like you.
+      </p>
+      <img
+        class="auth-mascot"
+        src="/ahab.svg"
+        alt=""
+        width="160"
+        height="165"
+      />
+    </div>
+    <div class="auth-card">
+      <h2>Your own creative space</h2>
+      <p class="muted">A username and a password. That’s the start.</p>
+      <form data-auth="signup">
+        <div class="field">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            autocomplete="username"
+            minlength="3"
+            maxlength="24"
+            pattern="[A-Za-z0-9_]+"
+            required
+            placeholder="Your creative name"
+          />
+          <p class="field-help" data-username-status>
+            3–24 letters, numbers or underscores. Not case-sensitive.
+          </p>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="password-visibility">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="7"
+              maxlength="18"
+              required
+            />
+            <button
+              type="button"
+              data-password-toggle="password"
+              aria-label="Show password"
+            >
+              Show
+            </button>
+          </div>
+          <p class="field-help">
+            7–18 characters, including a letter and a number.
+          </p>
+        </div>
+        <div class="field">
+          <label for="passcode">
+            Recovery passcode <span class="optional">Optional</span>
+          </label>
+          <input
+            id="passcode"
+            name="passcode"
+            type="password"
+            minlength="8"
+            maxlength="8"
+            pattern="[a-z0-9]{8}"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="field-help">
+            Exactly 8 lowercase letters or numbers. Save it somewhere safe.
+            Without a passcode, you cannot recover your account while signed
+            out.
+          </p>
+        </div>
+        <label
+          class="check-label"
+          style="align-items:flex-start;margin-bottom:20px"
+        >
+          <input type="checkbox" required style="margin-top:3px" />
+          <span>
+            I agree to the{" "}
+            <a class="text-link" href="/terms">
+              Terms
+            </a>{" "}
+            and have read the{" "}
+            <a class="text-link" href="/privacy">
+              Privacy notice
+            </a>
+            .
+          </span>
+        </label>
+        <button class="button primary full" type="submit">
+          Create your account <Icon name="arrow" size={17} />
+        </button>
+        <p class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      <p class="form-footnote">
+        Already have a space here?{" "}
+        <a class="text-link" href="/signin">
+          Sign in
+        </a>
+      </p>
+    </div>
+  </section>
+</Layout>

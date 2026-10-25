@@ -1,11 +1,213 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
+import PricingCards from "../components/PricingCards.astro";
+const user = (Astro.locals as any).user;
 ---
 
-<Layout>
-	<Welcome />
+<Layout title="Your face. Your words. Your next great take.">
+  <section class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">A SMALL STUDIO FOR BIG IDEAS</p>
+          <h1>
+            Your face.
+            <br />
+            Your words.
+            <br />
+            Your next <em>great take.</em>
+          </h1>
+          <p class="lede">
+            Turn a photo and a script into a personal AI video. Make a product
+            introduction, test a new hook, or put a face to your idea.
+          </p>
+          <div class="button-row">
+            <a href={user ? "/studio" : "/signup"} class="button primary">
+              Make your first video <Icon name="arrow" size={18} />
+            </a>
+            <a href="/pricing" class="button secondary">
+              See the pricing
+            </a>
+          </div>
+          <div class="hero-footnote">
+            <span>
+              <Icon name="check" size={14} />
+              One-time purchases
+            </span>
+            <span>
+              <Icon name="check" size={14} />
+              No subscription
+            </span>
+          </div>
+        </div>
+        <div
+          class="hero-art"
+          aria-label="Illustration of Ahab’s photo and script to video workflow"
+        >
+          <div class="floating-note note-script">
+            <Icon name="image" size={22} />
+            <div>
+              <strong>Start with a face</strong>
+              <small>Yours, or one you imagine</small>
+            </div>
+          </div>
+          <div class="take-card">
+            <div class="take-label">
+              <span>YOUR NEXT TAKE</span>
+              <span>AHAB STUDIO</span>
+            </div>
+            <img
+              src="/ahab.svg"
+              alt="Ahab’s illustrated blue mascot"
+              width="265"
+              height="285"
+            />
+            <div class="take-bottom">A little idea. A little personality.</div>
+          </div>
+          <div class="floating-note note-output">
+            <Icon name="video" size={23} />
+            <div>
+              <strong>Ready for your feed</strong>
+              <small>Vertical, personal, yours</small>
+            </div>
+          </div>
+          <div class="hero-art-caption">
+            Workflow illustration · your videos appear in your library
+          </div>
+        </div>
+      </div>
+      <div class="benefit-strip">
+        <div>
+          <Icon name="account" size={25} />
+          <div>
+            <strong>A face that fits your story</strong>
+            <p>Upload a portrait or create an AI presenter.</p>
+          </div>
+        </div>
+        <div>
+          <Icon name="audio" size={25} />
+          <div>
+            <strong>Say it your way</strong>
+            <p>Use an AI voice or your own narration.</p>
+          </div>
+        </div>
+        <div>
+          <Icon name="purchases" size={25} />
+          <div>
+            <strong>Pay for your next project</strong>
+            <p>From $11. Your allowance never expires.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="container">
+      <div class="section-heading">
+        <p class="eyebrow">FROM IDEA TO FIRST TAKE</p>
+        <h2>
+          Keep the creative part.
+          <br />
+          Skip the production setup.
+        </h2>
+      </div>
+      <div class="steps-grid">
+        <article class="step">
+          <span class="step-number">1</span>
+          <h3>Choose your face</h3>
+          <p>
+            Upload a clear portrait you have permission to use, or describe a
+            new AI presenter.
+          </p>
+        </article>
+        <article class="step">
+          <span class="step-number">2</span>
+          <h3>Make it sound like you</h3>
+          <p>
+            Write and approve your script. Pick a supported AI voice or upload
+            your own narration.
+          </p>
+        </article>
+        <article class="step">
+          <span class="step-number">3</span>
+          <h3>Give it your own direction</h3>
+          <p>
+            Set the tone and format, then generate. Your finished video is saved
+            in your private library.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section" style="background:#edf5fc">
+    <div class="container">
+      <div class="section-heading">
+        <p class="eyebrow">TWO WAYS TO MAKE A TAKE</p>
+        <h2>
+          A voice for your idea.
+          <br />A scene for your story.
+        </h2>
+      </div>
+      <div class="mode-grid">
+        <article class="mode-card">
+          <div class="mode-icon">
+            <Icon name="account" size={27} />
+          </div>
+          <span class="pill">PRESENTER · 720P</span>
+          <h3 style="margin-top:16px">Put a face to your words</h3>
+          <p>
+            A talking presenter for introductions, explainers, ad hooks and
+            personal messages. One face image plus a script or narration.
+          </p>
+          <p>
+            <strong>Up to 30, 80 or 120 seconds</strong>, depending on your
+            package. Speech timing can vary.
+          </p>
+        </article>
+        <article class="mode-card">
+          <div class="mode-icon">
+            <Icon name="video" size={27} />
+          </div>
+          <span class="pill">SHORT SCENE · 768P</span>
+          <h3 style="margin-top:16px">Give a moment some motion</h3>
+          <p>
+            Direct a short scene with a prompt, up to two images and optional
+            short video or audio references.
+          </p>
+          <p>
+            <strong>5–15 seconds per clip.</strong> Best for visual concepts and
+            reactions. Precise product handling is not guaranteed.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="container">
+      <div class="section-heading center">
+        <p class="eyebrow">YOUR PROJECT. YOUR PACE.</p>
+        <h2>One purchase. No monthly tab.</h2>
+        <p class="lede">Choose the room you need for your next idea.</p>
+      </div>
+      <PricingCards signedIn={!!user} />
+      <p class="fine-print" style="text-align:center;margin-top:22px">
+        Each finished video uses one allowance. Confirmed generation failures
+        restore that allowance. Purchases are final, subject to applicable law.
+      </p>
+    </div>
+  </section>
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="cta-band">
+        <div>
+          <h2>Your next idea deserves a take.</h2>
+          <p>Bring your words. We’ll make room for the rest.</p>
+        </div>
+        <a class="button" href={user ? "/studio" : "/signup"}>
+          Open your studio <Icon name="arrow" size={18} />
+        </a>
+      </div>
+    </div>
+  </section>
 </Layout>

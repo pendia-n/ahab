@@ -1,0 +1,68 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeading from "../components/PageHeading.astro";
+import Icon from "../components/Icon.astro";
+---
+
+<Layout title="Your library" app protect active="library">
+  <PageHeading
+    eyebrow="YOUR CREATIVE SHELF"
+    title="A little room for your work."
+    description="Your references, saved words and finished takes. All in one place."
+  >
+    <a href="/studio" class="button primary small">
+      <Icon name="create" size={16} />
+      Make a video
+    </a>
+  </PageHeading>
+  <div class="stats-row" id="library-stats">
+    <div class="stat-card">
+      <strong>—</strong>
+      <span>Saved images · 40 slots</span>
+    </div>
+    <div class="stat-card">
+      <strong>—</strong>
+      <span>Saved audio · 20 slots</span>
+    </div>
+    <div class="stat-card">
+      <strong>—</strong>
+      <span>Video references · 10 slots</span>
+    </div>
+    <div class="stat-card">
+      <strong>—</strong>
+      <span>Finished videos · 23 slots</span>
+    </div>
+  </div>
+  <nav class="library-toolbar" aria-label="Filter your library">
+    <button class="filter-button active" data-filter="output">
+      Finished videos
+    </button>
+    <button class="filter-button" data-filter="image">
+      Images
+    </button>
+    <button class="filter-button" data-filter="audio">
+      Audio
+    </button>
+    <button class="filter-button" data-filter="video">
+      References
+    </button>
+    <button class="filter-button" data-filter="prompts">
+      Saved prompts
+    </button>
+    <button class="filter-button" data-filter="jobs">
+      Generation history
+    </button>
+  </nav>
+  <div id="library-content" aria-live="polite">
+    <p class="loading-text">
+      <span class="spinner"></span>Opening your library…
+    </p>
+  </div>
+  <p class="retention-note">
+    As a section fills up, adding a new item removes its oldest item first.
+    Viewing or reusing an item does not extend its stay. Finished videos also
+    expire after 121 days. Download what you want to keep. Saved prompts have 80
+    slots.
+  </p>
+  <p class="form-status" id="library-error" role="alert"></p>
+</Layout>

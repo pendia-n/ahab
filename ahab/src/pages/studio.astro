@@ -1,0 +1,379 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeading from "../components/PageHeading.astro";
+import Icon from "../components/Icon.astro";
+---
+
+<Layout title="Your next take" app protect active="create">
+  <PageHeading
+    eyebrow="LET’S MAKE SOMETHING"
+    title="Your next take."
+    description="A face, a few words, a little direction. Make it yours."
+  >
+    <a class="button secondary small" href="/library">
+      <Icon name="library" size={16} />
+      Your library
+    </a>
+  </PageHeading>
+  <div id="studio-availability" class="notice checkout-notice" hidden></div>
+  <div class="studio-grid">
+    <div class="studio-editor">
+      <form id="generate-form">
+        <input type="hidden" name="mode" value="presenter" />
+        <section class="panel">
+          <div class="panel-header">
+            <h2>
+              <span class="section-step">1</span>Choose your kind of take
+            </h2>
+            <span class="pill">YOUR CREATIVE DIRECTION</span>
+          </div>
+          <div class="mode-tabs" role="tablist" aria-label="Video type">
+            <button
+              type="button"
+              role="tab"
+              id="mode-presenter"
+              aria-controls="presenter-options"
+              aria-selected="true"
+              data-mode="presenter"
+            >
+              <Icon name="account" size={17} />
+              Talking presenter
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="mode-scene"
+              aria-controls="scene-options"
+              aria-selected="false"
+              data-mode="video_reference"
+            >
+              <Icon name="video" size={17} />
+              Short scene
+            </button>
+          </div>
+          <p class="mode-description" id="mode-description">
+            A talking presenter made from one face image and your script or
+            narration. Best for an introduction, explainer or new ad hook.
+          </p>
+          <div class="field">
+            <label for="allowance">Use a package</label>
+            <select name="allowanceId" id="allowance" required>
+              <option value="">Loading your allowances…</option>
+            </select>
+            <p class="field-help" id="allowance-help">
+              Each finished video uses one video allowance.
+            </p>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h2>
+              <span class="section-step">2</span>
+              <span id="image-heading">Give it a face</span>
+            </h2>
+            <span id="image-counter">0 selected</span>
+          </div>
+          <div class="upload-zone">
+            <Icon name="upload" size={24} />
+            <div>
+              <strong>Upload a face image</strong>
+              <small>JPG, PNG or WebP · up to 10 MB</small>
+            </div>
+            <input
+              type="file"
+              aria-label="Upload reference image"
+              accept="image/jpeg,image/png,image/webp"
+              data-upload="image"
+            />
+          </div>
+          <div class="asset-choices" id="image-choices"></div>
+          <p class="field-help" id="image-help">
+            Choose one clear portrait. Use a face you have permission to use.
+          </p>
+          <button
+            class="button ghost small"
+            type="button"
+            id="portrait-toggle"
+            style="padding-left:0;margin-top:7px"
+          >
+            <Icon name="spark" size={15} />
+            Or create an AI portrait
+          </button>
+          <div class="portrait-form" id="portrait-fields" hidden>
+            <label for="portrait-prompt">Describe your presenter</label>
+            <textarea
+              id="portrait-prompt"
+              rows="3"
+              maxlength="3000"
+              placeholder="A friendly baker in their 30s, natural light, simple kitchen background…"
+            ></textarea>
+            <button
+              class="button secondary small"
+              id="create-portrait"
+              type="button"
+              style="margin-top:12px"
+            >
+              <Icon name="spark" size={14} />
+              Create portrait
+            </button>
+            <p class="field-help" id="portrait-help">
+              Uses one portrait allowance. A generated portrait counts toward
+              your 40 saved images.
+            </p>
+            <p
+              class="form-status"
+              id="portrait-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <div
+            id="scene-options"
+            role="tabpanel"
+            aria-labelledby="mode-scene"
+            hidden
+          >
+            <div class="inline-divider">OPTIONAL SCENE REFERENCES</div>
+            <div class="field">
+              <label for="video-reference">Video reference</label>
+              <select name="videoId" id="video-reference">
+                <option value="">No video reference</option>
+              </select>
+              <p class="field-help">
+                One clip, up to 5 seconds. A short reference guides the scene.
+              </p>
+            </div>
+            <div class="upload-zone upload-inline">
+              <Icon name="video" size={22} />
+              <div>
+                <strong>Add a short video reference</strong>
+                <small>MP4 · up to 5 seconds and 16 MB</small>
+              </div>
+              <input
+                type="file"
+                aria-label="Upload video reference"
+                accept="video/mp4"
+                data-upload="video"
+              />
+            </div>
+          </div>
+          <p
+            class="form-status"
+            id="upload-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h2>
+              <span class="section-step">3</span>Make it sound like you
+            </h2>
+          </div>
+          <div
+            id="presenter-options"
+            role="tabpanel"
+            aria-labelledby="mode-presenter"
+          >
+            <div class="field">
+              <label for="voice-source">Narration</label>
+              <select id="voice-source">
+                <option value="ai">Choose an AI voice</option>
+                <option value="upload">Use uploaded narration</option>
+              </select>
+            </div>
+            <div class="field" id="voice-field">
+              <label for="voice-id">AI voice</label>
+              <select name="voiceId" id="voice-id">
+                <option value="">Loading supported voices…</option>
+              </select>
+              <p class="field-help">
+                The presenter generates speech from your script. No recording is
+                needed.
+              </p>
+            </div>
+            <div class="field" id="script-field">
+              <div class="field-toolbar">
+                <label for="script">What should your presenter say?</label>
+              </div>
+              <textarea
+                name="script"
+                id="script"
+                rows="6"
+                maxlength="12000"
+                placeholder="Start with your opening line. Write exactly what you want the presenter to say."
+              ></textarea>
+              <div class="word-count">
+                <span id="script-count">0 words · timing is an estimate</span>
+                <span>Your words, as written</span>
+              </div>
+            </div>
+          </div>
+          <div id="audio-field" hidden>
+            <div class="field">
+              <label for="audio-reference" id="audio-label">
+                Uploaded narration
+              </label>
+              <select name="audioId" id="audio-reference">
+                <option value="">Choose saved audio</option>
+              </select>
+              <p class="field-help" id="audio-help">
+                MP3 or WAV. Your recording supplies the presenter’s voice.
+              </p>
+            </div>
+            <div class="upload-zone">
+              <Icon name="audio" size={22} />
+              <div>
+                <strong id="audio-upload-heading">Upload your narration</strong>
+                <small id="audio-upload-limits">MP3 or WAV · up to 16 MB</small>
+              </div>
+              <input
+                type="file"
+                aria-label="Upload audio"
+                accept="audio/mpeg,audio/wav,audio/x-wav"
+                data-upload="audio"
+              />
+            </div>
+          </div>
+          <div class="field" style="margin-top:22px;margin-bottom:0">
+            <div class="field-toolbar">
+              <label for="prompt">
+                Creative direction{" "}
+                <span class="optional" id="direction-optional">
+                  Required
+                </span>
+              </label>
+              <button type="button" id="save-prompt">
+                Save prompt
+              </button>
+            </div>
+            <textarea
+              id="prompt"
+              name="prompt"
+              rows="3"
+              maxlength="1000"
+              required
+              placeholder="Keep it warm and natural, like explaining something to a friend."
+            ></textarea>
+            <p class="field-help" id="direction-help">
+              Describe delivery and motion. Your script stays separate so your
+              presenter knows what to say.
+            </p>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h2>
+              <span class="section-step">4</span>Set up the frame
+            </h2>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="duration">Duration</label>
+              <select name="duration" id="duration">
+                <option value="15">Up to 15 seconds</option>
+                <option value="30" selected>
+                  Up to 30 seconds
+                </option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="aspect-ratio">Format</label>
+              <select name="aspectRatio" id="aspect-ratio">
+                <option value="9:16">Vertical · 9:16</option>
+              </select>
+            </div>
+          </div>
+          <label class="check-label" id="caption-field">
+            <input name="caption" type="checkbox" />
+            Add captions to my presenter video
+          </label>
+          <p class="field-help" style="margin-top:13px" id="duration-note">
+            Vertical video fits TikTok and Shorts. Choose a duration that gives
+            your script room; speech timing can vary.
+          </p>
+        </section>
+      </form>
+    </div>
+    <aside class="studio-side">
+      <section class="panel preview-panel">
+        <div class="panel-header">
+          <h2>Your take, in the making</h2>
+          <span class="pill" id="preview-resolution">
+            720P
+          </span>
+        </div>
+        <div class="preview-stage" id="preview-stage">
+          <div class="preview-placeholder">
+            <span class="preview-mark">
+              <Icon name="video" size={27} />
+            </span>
+            <strong>
+              A little idea.
+              <br />A finished video.
+            </strong>
+            <p>
+              Select your face image
+              <br />
+              to start setting the scene.
+            </p>
+          </div>
+        </div>
+        <div class="preview-meta">
+          <span class="pill" id="preview-format">
+            9:16 · VERTICAL
+          </span>
+          <span class="pill" id="preview-duration">
+            UP TO 30 SEC
+          </span>
+        </div>
+        <div class="summary-row">
+          <span>Your package</span>
+          <strong id="preview-package">Choose a package</strong>
+        </div>
+        <div class="summary-row">
+          <span>This take uses</span>
+          <strong>1 video allowance</strong>
+        </div>
+        <div class="generate-area">
+          <button
+            type="submit"
+            form="generate-form"
+            class="button primary full"
+            id="generate-button"
+            disabled
+          >
+            <Icon name="spark" size={17} />
+            Generate my video
+          </button>
+          <p class="fine-print">
+            Check your words and references before generating.
+            <br />A confirmed failure restores your video allowance.
+          </p>
+        </div>
+        <p class="form-status" id="generation-error" role="alert"></p>
+        <div
+          class="generation-status"
+          id="generation-status"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+      </section>
+      <div class="prompt-tip">
+        <strong>Small changes. A fresh take.</strong>Try one clear idea per
+        video. Keep your opening direct, let the presenter speak naturally, and
+        leave room for a breath.
+      </div>
+    </aside>
+  </div>
+  <section class="panel jobs-panel" id="recent-jobs" hidden>
+    <div class="panel-header">
+      <h2>Currently in the studio</h2>
+      <a class="text-link" style="font-size:11px" href="/library">
+        View your library
+      </a>
+    </div>
+    <div class="job-list" id="studio-jobs"></div>
+  </section>
+</Layout>
