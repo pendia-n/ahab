@@ -13,39 +13,12 @@ function stripe(env: AhabEnv) {
   });
 }
 export async function readiness(env: AhabEnv) {
-  const budget = await env.DB.prepare(
-    "SELECT * FROM provider_budget WHERE id=1",
-  ).first<{
-    funded_cents: number;
-    reserved_cents: number;
-    spent_cents: number;
-    paused: number;
-  }>();
-  const funded =
-    !!budget &&
-    !budget.paused &&
-    budget.funded_cents - budget.spent_cents - budget.reserved_cents >= 50;
-  const generationEnabled =
-    env.GENERATION_ENABLED === "true" && !!env.OPENROUTER_API_KEY && funded;
-  const longVerified = Number(env.AHAB_AVATAR_MAX_SECONDS_VERIFIED || 0) >= 120;
-  const voices = getAvatarVoices(env).map((v) => ({ id: v.id, name: v.label }));
-  const checkoutEnabled =
-    env.CHECKOUT_ENABLED === "true" &&
-    !!env.STRIPE_SECRET_KEY &&
-    !!env.STRIPE_WEBHOOK_SECRET &&
-    generationEnabled &&
-    longVerified &&
-    voices.length > 0;
-  return {
-    generationEnabled,
-    checkoutEnabled,
-    usdcEnabled: checkoutEnabled && env.USDC_ENABLED === "true",
-    voices,
-    maxPresenterDuration: Number(env.AHAB_AVATAR_MAX_SECONDS_VERIFIED || 0),
-    reason: generationEnabled
-      ? undefined
-      : "Generation is being prepared. Existing purchases and saved media remain available.",
-  };
+  const generationEnabled = env.GENERATION_ENABLED === "true" && !!env.OPENROUTER_API_KEY;
+  const voices = getAvatarVoices(env).map(v => ({id:v.id,name:v.label}));
+  const checkoutEnabled = env.CHECKOUT_ENABLED === "true" && !!env.STRIPE_SECRET_KEY && !!env.STRIPE_WEBHOOK_SECRET && generationEnabled;
+  const generationReason = env.GENERATION_ENABLED !== "true" ? "Generation is currently turned off." : !env.OPENROUTER_API_KEY ? "The generation service is not configured." : undefined;
+  const checkoutReason = env.CHECKOUT_ENABLED !== "true" ? "Purchases are currently turned off." : !env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET ? "Payment setup is incomplete." : generationReason;
+  return {generationEnabled,checkoutEnabled,usdcEnabled:checkoutEnabled && env.USDC_ENABLED === "true",voices,maxPresenterDuration:120,reason:generationReason,checkoutReason};
 }
 export async function purchases(env: AhabEnv, userId: string) {
   const [p, a, config] = await Promise.all([

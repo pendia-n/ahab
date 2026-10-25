@@ -24,18 +24,18 @@ Apply local migrations with `pnpm exec wrangler d1 migrations apply ahab-db --lo
 
 The ignored `.env` holds `AHAB_JWT_SECRET`, `OPENROUTER_API_KEY`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The signing key is generated locally with cryptographic randomness. Never commit, print or paste any of these values. `pnpm secrets:publish` sends populated values directly to Cloudflare with output suppressed; it reports secret names only. Empty provider values are omitted.
 
-Paid features are deliberately disabled in the initial deployment. Set the following nonsecret settings only after verification:
+The production deployment uses the following nonsecret settings:
 
 - `APP_URL`: the exact deployed public HTTPS origin, without a trailing slash.
-- `AHAB_AVATAR_VOICES`: JSON array of verified HeyGen voice IDs and human-readable labels, shaped `[{"id":"verified-id","label":"Voice name"}]`. No fabricated/default IDs are sent to the provider.
-- `AHAB_AVATAR_MAX_SECONDS_VERIFIED`: the longest presenter duration accepted in a controlled provider acceptance test. OpenRouter publishes no Avatar IV duration list; null metadata does not establish an unlimited maximum or a 30-second maximum. The adapter requires this explicit setting before any presenter submission.
-- `GENERATION_ENABLED=true`: enable only with a funded, limited OpenRouter API key and an internal provider budget.
-- `CHECKOUT_ENABLED=true`: additionally requires Stripe secrets, an enabled generator, configured AI voices, and verified 120-second support before selling all three advertised packages.
+- `AHAB_AVATAR_VOICES`: optional custom stock voice list, shaped `[{"id":"voice-id","label":"Voice name"}]`. When absent or `[]`, the app supplies Sara from HeyGen’s documented stock catalog. All generation still goes through OpenRouter.
+- Presenter duration is governed by the purchased package (30, 80 or 120 seconds) and current provider metadata. The legacy `AHAB_AVATAR_MAX_SECONDS_VERIFIED` setting is ignored. These are Ahab package limits, not a claim that OpenRouter publishes an Avatar IV maximum.
+- `GENERATION_ENABLED=true`: enables generation with the configured OpenRouter API key. OpenRouter handles credit availability and billing; there is no separate D1 funding requirement.
+- `CHECKOUT_ENABLED=true`: requires the Stripe API and webhook secrets, plus enabled OpenRouter generation. No manual budget, voice list, or duration-verification switch blocks checkout.
 - `USDC_ENABLED=true`: display USDC availability only after enabling and verifying eligible stablecoin payments in this US Stripe account. Checkout uses dynamic payment methods; no payment method type is forced.
 
-The D1 `provider_budget` row starts with zero funding. Set `funded_cents` to a conservative amount of actual OpenRouter credit allocated to Ahab, after subtracting usage by other apps. This is an operator-managed spending ceiling, not a live provider balance. Reconcile it when adding funds or sharing the key. Atomic reservations prevent simultaneous accepted jobs from overspending this ceiling. Estimated costs use regular prices with conservative overhead; actual reported costs are rounded up to cents in the ledger, and missing completion costs settle at the estimate. Accepted failures with unknown cost retain their estimate in spent funds. Three confirmed failures pause generation. There is no automatic top-up.
+D1 atomically reserves customer allowances and records estimated/actual costs. The legacy `provider_budget` table is retained as a cost ledger only; its funding and pause values do not gate purchases or generation. Confirmed provider failures restore the relevant allowance exactly once. OpenRouter credit limits are managed in OpenRouter. There is no automatic top-up.
 
-Register the Stripe webhook URL `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`. Use the signing secret for this exact destination. Only signed, matched USD payments with the exact server-side total grant allowances. A return URL never grants credit. Use an isolated Stripe sandbox first. No voluntary cash-refund endpoint is provided; mandatory rights remain applicable.
+Register the Stripe webhook URL `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`. Use the signing secret for this exact destination. Only signed, matched USD payments with the exact server-side total grant allowances. A return URL never grants credit. No voluntary cash-refund endpoint is provided; mandatory rights remain applicable.
 
 ## Retention and privacy
 
@@ -73,4 +73,4 @@ Official contracts: [OpenRouter video API](https://openrouter.ai/docs/guides/ove
 
 ## Release verification
 
-Deployed at https://ahab.pendia-community.workers.dev. All 62 automated tests pass, Astro reports no diagnostics, and the production build succeeds. A real local browser verified signup, 270-day cookie flags, private image upload/ranges, prompt save/deletion, recovery, desktop/tablet/mobile layouts and offline behavior. Paid provider calls and real Stripe/USDC transactions have not been run. Checkout and generation remain disabled pending the launch configuration above.
+Deployed at https://ahab.pendia-community.workers.dev. All 62 automated tests pass, Astro reports no diagnostics, and the production build succeeds. A real local browser verified signup, 270-day cookie flags, private image upload/ranges, prompt save/deletion, recovery, desktop/tablet/mobile layouts and offline behavior. Paid provider calls and real Stripe/USDC transactions have not been run. The manual funding and duration launch gates have been removed; configured production secrets and enabled switches now activate checkout and generation.

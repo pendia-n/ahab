@@ -48,6 +48,7 @@ export class TestDatabase {
         "utf8",
       ),
     );
+    this.sqlite.exec(readFileSync(new URL("../migrations/0002_remove_manual_funding_gate.sql",import.meta.url),"utf8"));
   }
   prepare(sql: string) {
     return new TestStatement(this, sql);

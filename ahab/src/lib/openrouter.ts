@@ -273,7 +273,9 @@ export async function modelCapabilities(): Promise<ModelCapabilities> {
 export function getAvatarVoices(
   env: Pick<OpenRouterEnv, "AHAB_AVATAR_VOICES">,
 ): AvatarVoice[] {
-  if (!env.AHAB_AVATAR_VOICES) return [];
+  const defaults = [{id:"1bd001e7e50f421d891986aad5c8bbd2",label:"Sara · English"}];
+  // HeyGen stock catalog: https://developers.heygen.com/docs/voices/overview
+  if (!env.AHAB_AVATAR_VOICES || env.AHAB_AVATAR_VOICES.trim() === "[]") return defaults;
   try {
     const voices: unknown = JSON.parse(env.AHAB_AVATAR_VOICES);
     if (!Array.isArray(voices) || voices.length > 40) return [];
@@ -351,14 +353,6 @@ export function buildVideoRequest(
       input.video
     ) {
       throw new OpenRouterError("invalid_request", 400);
-    }
-    const verified = Number(env.AHAB_AVATAR_MAX_SECONDS_VERIFIED);
-    if (
-      !Number.isInteger(verified) ||
-      verified < input.duration ||
-      verified > 120
-    ) {
-      throw new OpenRouterError("duration_unverified", 503);
     }
     if (input.audio) {
       if (

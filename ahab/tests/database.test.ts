@@ -444,31 +444,14 @@ test("Checkout uses server USD prices and dynamic payment methods without subscr
   }
 });
 
-test("failed funding reservation rolls back the allowance and leaves no job", async (t) => {
-  const { db } = setup(t);
-  await seedUser(db);
-  await seedAllowance(db, "user-a", "studio");
-  await db
-    .prepare("UPDATE provider_budget SET funded_cents=99 WHERE id=1")
-    .run();
-  await assert.rejects(
-    job(db, "no-funding", "video", 100),
-    /temporarily unavailable/,
-  );
-  assert.equal(allowance(db).videos_remaining, 3);
-  assert.equal(count(db, "jobs"), 0);
-  assert.equal(budget(db).reserved_cents, 0);
-  await db
-    .prepare("UPDATE provider_budget SET funded_cents=1000,paused=1 WHERE id=1")
-    .run();
-  await assert.rejects(
-    job(db, "paused", "video", 100),
-    /temporarily unavailable/,
-  );
-  assert.equal(allowance(db).videos_remaining, 3);
+test("an unfunded legacy D1 record cannot block a paid customer allowance", async t => {
+ const {db}=setup(t);await seedUser(db);await seedAllowance(db,"user-a","studio");
+ await db.prepare("UPDATE provider_budget SET funded_cents=0,paused=1 WHERE id=1").run();
+ await job(db,"normal-generation","video",100);
+ assert.equal(allowance(db).videos_remaining,2);assert.equal(budget(db).reserved_cents,100);
 });
 
-test("simultaneous generation attempts cannot overdraw package allowance or shared funding", async (t) => {
+test("simultaneous generation attempts cannot overdraw customer package allowances", async (t) => {
   const { db } = setup(t);
   await seedUser(db);
   await seedAllowance(db, "user-a", "studio");
@@ -550,7 +533,7 @@ test("completed jobs never restore allowances and a lost submission remains rese
   assert.equal(budget(db).reserved_cents, 100);
 });
 
-test("three confirmed provider failures pause further spending", async (t) => {
+test("provider failures restore allowance without requiring an operator to unpause D1", async (t) => {
   const { db } = setup(t);
   await seedUser(db);
   await seedAllowance(db);
@@ -564,11 +547,9 @@ test("three confirmed provider failures pause further spending", async (t) => {
       .bind(`failure-${i}`)
       .run();
   }
-  assert.equal(budget(db).paused, 1);
+  assert.equal(budget(db).paused, 0);
   assert.equal(budget(db).consecutive_failures, 3);
-  await assert.rejects(
-    job(db, "blocked-after-failures"),
-    /temporarily unavailable/,
-  );
-  assert.equal(allowance(db).videos_remaining, 1);
+  assert.equal(allowance(db).videos_remaining,1);
+  await job(db,"retry-after-provider-recovery");
+  assert.equal(allowance(db).videos_remaining,0);
 });

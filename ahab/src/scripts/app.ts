@@ -39,6 +39,7 @@ type Config = {
   usdcEnabled?: boolean;
   maxPresenterDuration?: number;
   reason?: string;
+  checkoutReason?: string;
 };
 type QueryRoot = {
   querySelector(selector: string): unknown;
@@ -503,7 +504,7 @@ async function initializePurchases() {
       ? config.usdcEnabled
         ? "Secure checkout with Stripe. Eligible card and USDC options are shown at checkout."
         : "Secure checkout with Stripe. Available payment methods are shown at checkout."
-      : "Checkout is not open yet. You can explore your studio; purchases will be available when generation and payments are ready.";
+      : (config.checkoutReason || "Checkout is temporarily unavailable. Please try again shortly.");
     $$<HTMLButtonElement>("[data-checkout]").forEach((button) => {
       button.disabled = !checkoutEnabled;
       button.innerHTML = checkoutEnabled

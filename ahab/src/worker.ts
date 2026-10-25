@@ -133,10 +133,7 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
         } catch (e) {
           if (e instanceof OpenRouterError && !e.submissionUncertain) {
             await failed(this.env, id, e.message);
-            if (e.code === "provider_unfunded")
-              await this.env.DB.prepare(
-                "UPDATE provider_budget SET paused=1 WHERE id=1",
-              ).run();
+
           } else await uncertain(this.env, id);
           return null;
         }
