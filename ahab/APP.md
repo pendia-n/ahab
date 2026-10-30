@@ -1,76 +1,59 @@
 # Ahab
 
-A responsive Astro PWA on Cloudflare Workers. Customers create a talking presenter or a short reference-guided scene using OpenRouter. Stripe Checkout sells one-time allowances; D1 tracks accounts, purchases and durable jobs; private R2 stores media.
+Ahab is a small AI-assisted video studio for founders, creators and businesses without a production team. It turns an approved brief, optional portrait/product preparation and a suitable reference into one downloadable vertical MP4. Customers choose the deliverable rather than navigating a model catalog. Review before spending, clear storage limits and reusable prepaid allowances keep the next step predictable.
 
-## Packages
+## Purchase and create
 
-| Package      | Price | Separate videos | Maximum presenter length per video | AI portraits |
-| ------------ | ----: | --------------: | ---------------------------------: | -----------: |
-| First take   |   $11 |               1 |                         30 seconds |            1 |
-| Creator set  |   $22 |               3 |                         80 seconds |            3 |
-| Campaign set |   $47 |               5 |                        120 seconds |            5 |
+Choose one of six formats, a selected duration, 720p or 1080p, available delivery and quantity. Add different configurations to one purchase. Anyone can review an exact server-calculated quote; sign in before checkout. Payment grants allowances without starting generation. Single and multiple purchases never expire and can be used separately. One video consumes one compatible allowance even when shorter; unused seconds are not a wallet. Allowances include one optional successful image operation and three writing preparations per video. Additional image operations can be purchased separately. Existing paid packages and receipts retain their allowances; no new legacy-package sales.
 
-Allowances do not expire. Short-scene mode always produces one 5–15 second, 768p clip and consumes one video allowance. Presenter mode uses 720p vertical video. Speech timing is approximate. No subscriptions, stitching, standalone speech generation or voice cloning are implemented.
+Formats: talking presenter, demo/tutorial, unboxing, scripted reaction, showcase/lifestyle, explainer. Explainers select presenter-led or scene-led delivery. Presenter uses Avatar IV; standard scenes use Wan 3.0. Express is implemented with Wan 3.0 Prime but unavailable until `EXPRESS_VERIFIED=true` confirms an actual speed benefit and supported inputs. Model names stay server-side. A higher price is not a promise of better visual quality.
 
-## Development
+## Duration policy
 
-Use Node 22.23.4+ or 24, and pnpm 10.34.5 (pinned in package.json). `pnpm install`, `pnpm check`, `pnpm test`, then `pnpm build`. Astro's checker currently requires TypeScript 6; TypeScript 7 is not supported by this checker.
+| Format               | Selected seconds | Generation target                                             |
+| -------------------- | ---------------- | ------------------------------------------------------------- |
+| Presenter            | 5–120            | Below 8 becomes 8; above 115 becomes 121; otherwise unchanged |
+| Demo                 | 5–25             | Below 8 becomes 8; 25 becomes 29                              |
+| Unboxing             | 5–25             | Below 7 becomes 7; 25 becomes 29                              |
+| Reaction             | 5–25             | Below 14 becomes 14; 25 becomes 29                            |
+| Showcase             | 10–25            | Below 12 becomes 12                                           |
+| Explainer, presenter | 5–100            | Below 12 becomes 12; 100 becomes 106                          |
+| Explainer, scenes    | 5–30             | Below 12 becomes 12                                           |
 
-Start the development server with `pnpm dev --background`; manage it with `pnpm astro dev status`, `pnpm astro dev logs`, and `pnpm astro dev stop`. If the shell cannot write Wrangler's global registry/logs, point `WRANGLER_LOG_PATH`, `WRANGLER_REGISTRY_PATH` and `MINIFLARE_REGISTRY_PATH` at writable temporary locations. Never dump logs or environment files containing secrets.
+These are Ahab bonuses, not provider duration restrictions. Quotes show selected and target time. Speech timing can vary; actual downloaded MP4 metadata is inspected and stored. Public Avatar metadata publishes no maximum. The adapter accepts Ahab's 121-second target, without claiming an end-to-end long-duration provider test. Both scene models list 2–30 seconds and 720p/1080p.
 
-Apply local migrations with `pnpm exec wrangler d1 migrations apply ahab-db --local`. Apply production migrations with `--remote` only after checking `pnpm exec wrangler whoami`. `pnpm deploy` builds and deploys the custom Worker including its Workflow and scheduled cleanup.
+## Pricing
 
-## Secrets and launch switches
+USD rates: presenter $0.0959/s single and $0.095/s multiple; scene $0.2729/$0.272; Express $0.3709/$0.370. Two or more video allowances selected at up to 30 seconds qualify for multiple rates; longer items do not. Charge selected time, including bonus time without a separate charge. Normal amounts round to cents; Express 30 seconds has an explicit $11 unit-price override for either quantity. Quotes also enforce the agreed complete-cost minimum: planned native video plus optional image/text/media headroom, 5.5% provider funding assumption, the merchant-supplied 2.9% + $0.30 payment assumption and $0.81 contribution per video. These are planning inputs, not measured universal fees. Minimums are calculated using 1080p cost for either resolution to keep retail prices equal. Current regular catalog cost inputs are presenter $0.05/s, scene $0.20/s at 1080p and $0.10/s at 720p, Express $0.28/$0.14. Recheck before changing prices. No extra render fee. Image-only allowances are quoted separately.
 
-The ignored `.env` holds `AHAB_JWT_SECRET`, `OPENROUTER_API_KEY`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The signing key is generated locally with cryptographic randomness. Never commit, print or paste any of these values. `pnpm secrets:publish` sends populated values directly to Cloudflare with output suppressed; it reports secret names only. Empty provider values are omitted.
+## Creative preparation
 
-The production deployment uses the following nonsecret settings:
+All AI calls use OpenRouter. GLM 5.3 Flash supports keep exact dialogue, polish, or draft from supplied facts, using a shared instruction and format context. Exact dialogue is preserved in code. The user approves the final script and references. No invented testimonials, measured benefits or spontaneous customer experience.
 
-- `APP_URL`: the exact deployed public HTTPS origin, without a trailing slash.
-- `AHAB_AVATAR_VOICES`: optional custom stock voice list, shaped `[{"id":"voice-id","label":"Voice name"}]`. When absent or `[]`, the app supplies Sara from HeyGen’s documented stock catalog. All generation still goes through OpenRouter.
-- Presenter duration is governed by the purchased package (30, 80 or 120 seconds) and current provider metadata. The legacy `AHAB_AVATAR_MAX_SECONDS_VERIFIED` setting is ignored. These are Ahab package limits, not a claim that OpenRouter publishes an Avatar IV maximum.
-- `GENERATION_ENABLED=true`: enables generation with the configured OpenRouter API key. OpenRouter handles credit availability and billing; there is no separate D1 funding requirement.
-- `CHECKOUT_ENABLED=true`: requires the Stripe API and webhook secrets, plus enabled OpenRouter generation. No manual budget, voice list, or duration-verification switch blocks checkout.
-- `USDC_ENABLED=true`: display USDC availability only after enabling and verifying eligible stablecoin payments in this US Stripe account. Checkout uses dynamic payment methods; no payment method type is forced.
+Use a suitable authorized portrait directly. Optional image generation/editing uses FLUX 3 Image Klein; combining two references uses Seedream 5.0 Flash. Generate at 1K, retain the original, and prepare a 540×960 master in the browser using canvas before uploading it as an ordinary private image. If that browser preparation fails, the original remains available; the UI reports the failure and requests manual preparation. This is deterministic resizing, not another AI charge. Review the composition before video. Video receives at most one approved master image. Preparing a combined character/product image uses an image allowance.
 
-D1 atomically reserves customer allowances and records estimated/actual costs. The legacy `provider_budget` table is retained as a cost ledger only; its funding and pause values do not gate purchases or generation. Confirmed provider failures restore the relevant allowance exactly once. OpenRouter credit limits are managed in OpenRouter. There is no automatic top-up.
+Presenter speech uses a configured HeyGen voice or uploaded MP3/WAV, up to the selected generation target and a 121-second storage ceiling. Audio duration is checked from actual container/frame timing. No standalone voice model or music model.
 
-Register the Stripe webhook URL `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`. Use the signing secret for this exact destination. Only signed, matched USD payments with the exact server-side total grant allowances. A return URL never grants credit. No voluntary cash-refund endpoint is provided; mandatory rights remain applicable.
+Scene generation uses text and an optional first-frame image, with native generated audio. Audio/video-reference forwarding stays disabled because OpenRouter's generic modality list does not prove the provider honors those fields. Uploaded video remains available from existing libraries; unsupported inputs are rejected rather than ignored. No universal five-second claim is made about Wan's reference consumption.
 
-## Retention and privacy
+A-roll/B-roll is a concise native shot brief for a single scene generation. It does not imply an external timeline editor. Avatar output remains a presenter video. No separate-track assembly, FFmpeg, music mixing, voice cloning or autonomous paid rerolls.
 
-All limits are per account, ordered by original save order with a stable sequence tie-breaker. Viewing or reusing a file does not refresh its position.
+## Payments and recovery
 
-| Saved item                           | Limit | Age limit                              |
-| ------------------------------------ | ----: | -------------------------------------- |
-| Manually entered prompts             |    80 | Until FIFO eviction or manual deletion |
-| Input images and generated portraits |    40 | Until FIFO eviction or manual deletion |
-| Uploaded audio                       |    20 | Until FIFO eviction or manual deletion |
-| Uploaded video references            |    10 | Until FIFO eviction or manual deletion |
-| Generated video outputs              |    23 | 121 days, whichever limit occurs first |
+One-time Stripe Checkout, inline `price_data`, USD and dynamic payment methods. USDC is eligible only if Stripe has enabled crypto for the merchant/customer; `USDC_ENABLED=false` excludes crypto. Webhook: `/api/webhooks/stripe`. Verify signature, ownership, session, currency, total and paid status. Handle completed, asynchronous success/failure and expired events idempotently. Reconcile pending sessions after their 30-minute expiry; failed/cancelled unpaid checkouts never block new purchases. Browser return pages do not grant allowances. No voluntary cash refunds; technical failures restore the affected allowance once, subject to mandatory rights.
 
-Prompts are saved on explicit Save/Generate, not keystrokes. SQL triggers make FIFO eviction and allowance updates atomic. Evicted media is immediately removed from the readable library and entered in a deletion outbox; failed R2 deletes retry on subsequent writes and every 15 minutes. Expired videos are denied immediately, before physical cleanup. The private bucket has a 121-day lifecycle backstop on `outputs/` only.
+Generation and preparation request keys prevent duplicate paid submissions. Reserve video/image allowance atomically in D1. A queued job survives dispatch failure. Unknown provider acceptance is held for reconciliation without blind resubmission. A successful image remains available if video fails. The existing cost ledger records estimated/actual cost without requiring manually funded D1 balances.
 
-Validated job references are copied to a temporary private processing prefix, so FIFO or manual deletion cannot break a job in progress. Terminal jobs delete processing references through the outbox and clear their raw request text rather than retaining a hidden prompt archive. Uncertain submissions hold allowance and budget until reconciled; they must never be resubmitted automatically. Stale uncertain payloads and processing copies are removed after 48 hours; provider IDs and financial metadata remain for reconciliation. OpenRouter/provider processing has its own retention rules; this app does not claim zero retention by external providers.
+## Accounts and media
 
-Upload validation inspects actual bytes and timing tables: JPG/PNG/WebP up to 10 MB; WAV/MP3 up to 16 MB and 120 seconds stored, with the purchased video duration enforced at generation; MP4/WebM video references up to 16 MB and 5 seconds; scene audio references up to 15 seconds. Browser checks are only convenience checks. Unsupported streaming/fragmented containers are rejected with a message. These parsers inspect containers and frame timing, not a full codec decode. References do not guarantee exact product handling, unboxing, reactions, narrator replacement or lip-sync in scene mode.
+Username/password with Worker-compatible PBKDF2, optional hashed eight-character recovery passcode, signed JWT authorization and secure HttpOnly SameSite=Lax cookies lasting 270 days. Every page is session aware; signed-in users are redirected away from sign-in/signup/recovery. Secrets remain deployed Worker secrets and are never returned to clients. Do not read or publish credential files.
 
-Private downloads verify ownership and support video byte ranges. Provider copies use signed six-hour URLs tied to a specific job/file. API responses and private pages are never stored in the service-worker cache. Only public static assets and the offline information screen are cached.
+Private R2 with ownership checks, range responses and expiring provider grants. FIFO: 80 manually entered prompts in D1, 40 images, 20 audio files, 10 videos and 23 generated videos. Generated videos also expire after 121 days. Keep processing copies until the job reaches a terminal state. Deletion outbox retries failed storage deletes. Deleting output does not delete receipts or unused allowances.
 
-## Authentication
+## Development and release
 
-Usernames are case-insensitive and unique (3–24 letters, digits or underscores). Passwords are 7–18 characters containing a letter and digit. Web Crypto PBKDF2-HMAC-SHA-256 uses 100,000 iterations and a random salt per password/passcode. Optional recovery uses an eight-character lowercase alphanumeric passcode, separately hashed, a ten-minute single-use reset ticket and rate limits. Skipping recovery means signed-out recovery is unavailable.
+Node 22.23.4+ or 24 and pnpm 10.34.5. Run `pnpm check`, `pnpm test`, `pnpm build`. Start local development with `astro dev --background`; stop using `astro dev stop`. Apply D1 migrations locally before UI testing, then apply compatible migration 0003 remotely before deploying the new Worker. Preserve the existing secrets and bindings. Authenticate with Wrangler before deployment. Do not publish `.dev.vars` fixtures.
 
-Signed JWTs are kept in a Secure, HttpOnly, host-only SameSite=Lax cookie, with a 270-day absolute lifetime and D1 session revocation. The same token can authorize API clients with Bearer authentication; the browser never stores it in localStorage. Password reset/change revokes sessions and outstanding recovery tickets. Authenticated password changes are limited to four successful changes per rolling 24 hours. Browser writes require same-origin proof and a custom request header.
+Public APIs: `GET /api/config`; public `POST /api/quote-preview`; authenticated `POST /api/quotes`, `/api/checkout`, `/api/prepare`, `/api/generate`, `/api/portraits`; `GET /api/purchases`, `/api/library`, `/api/jobs/:id`; existing auth/media endpoints and Stripe webhook. Model IDs are internal adapter details.
 
-## Job recovery and verification status
-
-Workflow callbacks claim queued submissions atomically before making a paid request. A restart after a lost submission cannot claim it again. Provider job IDs are saved durably; polling and downloads retry the same job. Ambiguous timeouts remain held for manual reconciliation. Queued jobs and jobs with provider IDs are revisited by scheduled reconciliation; it never creates a second paid submission for a claimed job. A job completes only after R2 storage and asset/job metadata commit together.
-
-Unit/integration tests use real in-memory SQLite and mocked OpenRouter/Stripe events. Live money movement, real USDC checkout and paid OpenRouter generation require separate controlled acceptance tests and an explicit spending cap. A passing build or deployed health route does not establish those transactions work.
-
-Official contracts: [OpenRouter video API](https://openrouter.ai/docs/guides/overview/multimodal/video-generation), [provider options](https://openrouter.ai/docs/cookbook/video-generation/provider-specific-video-options), [image API](https://openrouter.ai/docs/guides/overview/multimodal/image-generation), [Stripe stablecoins](https://docs.stripe.com/payments/stablecoin-payments), [Cloudflare Workflows](https://developers.cloudflare.com/workflows/).
-
-## Release verification
-
-Deployed at https://ahab.pendia-community.workers.dev. All 62 automated tests pass, Astro reports no diagnostics, and the production build succeeds. A real local browser verified signup, 270-day cookie flags, private image upload/ranges, prompt save/deletion, recovery, desktop/tablet/mobile layouts and offline behavior. Paid provider calls and real Stripe/USDC transactions have not been run. The manual funding and duration launch gates have been removed; configured production secrets and enabled switches now activate checkout and generation.
+Validation status: automated tests exercise real SQLite migrations, pricing, legacy/new fulfillment, concurrency, request idempotency, exact script preservation, media validation and navigation. Paid provider generation, real-card payment and USDC wallet transactions must not be inferred from those tests. Express remains off until verified.

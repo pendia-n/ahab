@@ -1,3 +1,14 @@
+import {
+  generatedDuration,
+  serviceFor,
+  compatible,
+  taskById,
+  type TaskType,
+  type Service,
+  type Resolution,
+  type OfferInput,
+  type Quote,
+} from "../lib/offers";
 export {};
 type Asset = {
   id: string;
@@ -16,6 +27,10 @@ type Allowance = {
   videosRemaining: number;
   portraitsRemaining: number;
   maxDuration: number;
+  service: Service;
+  resolution: Resolution;
+  generatedCapacity: number;
+  legacy: boolean;
 };
 type Job = {
   id: string;
@@ -40,6 +55,7 @@ type Config = {
   maxPresenterDuration?: number;
   reason?: string;
   checkoutReason?: string;
+  expressEnabled?: boolean;
 };
 type QueryRoot = {
   querySelector(selector: string): unknown;
@@ -364,7 +380,7 @@ const statusLabel = (value: string) =>
     submitting: "Sending to the studio",
     pending: "Waiting to start",
     in_progress: "In the making",
-    uncertain: "Checking provider status",
+    uncertain: "Checking generation status",
     completed: "Completed",
     failed: "Failed",
   })[value] || value;
@@ -515,730 +531,614 @@ async function initializeLibrary() {
   });
 }
 
-async function initializePurchases() {
-  if (!$("#purchase-history")) return;
-  let checkoutEnabled = false;
-  const history = $("#purchase-history")!;
-  try {
-    const result = await api("/api/purchases");
-    let config: Config;
-    try {
-      config = await api("/api/config");
-    } catch {
-      config = { voices: [], generationEnabled: false, checkoutEnabled: false };
-    }
-    checkoutEnabled = result.checkoutEnabled ?? config.checkoutEnabled;
-    const availability = $("#checkout-availability")!;
-    availability.textContent = checkoutEnabled
-      ? config.usdcEnabled
-        ? "Secure checkout with Stripe. Eligible card and USDC options are shown at checkout."
-        : "Secure checkout with Stripe. Available payment methods are shown at checkout."
-      : config.checkoutReason ||
-        "Checkout is temporarily unavailable. Please try again shortly.";
-    $$<HTMLButtonElement>("[data-checkout]").forEach((button) => {
-      button.disabled = !checkoutEnabled;
-      button.innerHTML = checkoutEnabled
-        ? "Choose this package →"
-        : "Not available yet";
-    });
-    const allowances: Allowance[] = result.allowances || [];
-    if (allowances.length) {
-      $("#your-allowances")!.hidden = false;
-      $("#allowance-cards")!.innerHTML = allowances
-        .map(
-          (item) =>
-            `<article class="allowance-card"><h3>${escape(item.name || item.packageId)}</h3><p>${item.videosRemaining} video${item.videosRemaining === 1 ? "" : "s"} · up to ${item.maxDuration}s each<br/>${item.portraitsRemaining} portrait${item.portraitsRemaining === 1 ? "" : "s"} remaining</p><a href="/studio?allowance=${encodeURIComponent(item.id)}" class="text-link" style="font-size:12px">Use in studio →</a></article>`,
-        )
-        .join("");
-    }
-    const purchases = result.purchases || [];
-    history.innerHTML = purchases.length
-      ? `<table class="data-table"><thead><tr><th>Package</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>${purchases.map((item: any) => `<tr><td>${escape(item.name || item.packageId)}</td><td>${date(item.createdAt)}</td><td>$${(Number(item.amountCents) / 100).toFixed(2)} USD</td><td><span class="pill ${item.status === "paid" ? "green" : ""}">${escape(item.status)}</span></td></tr>`).join("")}</tbody></table>`
-      : '<p class="muted" style="font-size:12px">No purchases yet. Choose a package when you are ready to make your first take.</p>';
-    const params = new URLSearchParams(location.search);
-    if (params.has("session_id") || params.get("checkout") === "success") {
-      const message = $("#purchase-message")!;
-      message.hidden = false;
-      message.textContent =
-        "Thanks. Your payment is being verified. Allowances appear here once it is confirmed. If they have not arrived yet, refresh in a moment.";
-    }
-    if (params.get("checkout") === "cancelled") {
-      const message = $("#purchase-message")!;
-      message.hidden = false;
-      message.textContent =
-        "Checkout was closed. No new allowance has been added.";
-    }
-  } catch (error) {
-    history.textContent = showError(error);
-    $("#checkout-availability")!.textContent =
-      "Payment availability could not be checked. Refresh to try again.";
-  }
-  $$<HTMLButtonElement>("[data-checkout]").forEach((button) =>
-    button.addEventListener("click", async () => {
-      if (!checkoutEnabled) return;
-      button.disabled = true;
-      try {
-        const result = await post("/api/checkout", {
-          packageId: button.dataset.checkout,
-        });
-        const url = new URL(result.url);
-        if (
-          url.protocol !== "https:" ||
-          !["checkout.stripe.com", "buy.stripe.com"].includes(url.hostname)
-        )
-          throw new Error("The checkout link could not be verified.");
-        location.assign(url.href);
-      } catch (error) {
-        toast(showError(error));
-        button.disabled = false;
-      }
-    }),
+const money = (c: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    c / 100,
   );
+const option = (value: string, label: string) =>
+  `<option value="${escape(value)}">${escape(label)}</option>`;
+async function initializePurchases() {
+  const target = $("#purchase-history");
+  if (!target) return;
+  try {
+    const data = await api("/api/purchases");
+    $("#checkout-availability")!.hidden = true;
+    const root = $("#your-allowances")!;
+    root.hidden = !data.allowances.length;
+    $("#allowance-cards")!.innerHTML = data.allowances
+      .map(
+        (a: Allowance) =>
+          `<article class="panel"><h3>${escape(a.name)}</h3><p>${a.videosRemaining} video allowance${a.videosRemaining === 1 ? "" : "s"} · ${a.portraitsRemaining} image preparation${a.portraitsRemaining === 1 ? "" : "s"}</p><small>${a.maxDuration ? `Up to ${a.maxDuration}s selected · ` : ""}${escape(a.resolution)} · no expiry</small><p><a class="text-link" href="/studio?allowance=${encodeURIComponent(a.id)}">Use when ready →</a></p></article>`,
+      )
+      .join("");
+    target.innerHTML = data.purchases.length
+      ? `<table><thead><tr><th>Purchase</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>${data.purchases.map((p: any) => `<tr><td>${escape(p.name)}</td><td>${date(p.createdAt)}</td><td>${money(p.amountCents)}</td><td><span class="pill">${escape(p.status)}</span></td></tr>`).join("")}</tbody></table>`
+      : empty(
+          "Your next idea has room here.",
+          "Your verified purchases will appear here.",
+          false,
+        );
+    const state = new URLSearchParams(location.search).get("checkout");
+    if (state) {
+      const n = $("#purchase-message")!;
+      n.hidden = false;
+      n.textContent =
+        state === "success"
+          ? "Checking payment. Allowances appear after payment is verified. Nothing starts generating until you choose."
+          : "You can buy again whenever you are ready. An unpaid checkout does not use or block allowances.";
+    }
+  } catch (e) {
+    target.textContent = showError(e);
+  }
 }
-
-async function mediaDuration(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const media = document.createElement(
-      file.type.startsWith("video/") ? "video" : "audio",
-    );
-    const url = URL.createObjectURL(file);
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      media.removeAttribute("src");
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(
-        new Error(
-          "The file duration could not be read. Try a standard MP3, WAV or MP4 file.",
-        ),
-      );
-    }, 15000);
-    media.preload = "metadata";
-    media.onloadedmetadata = () => {
-      clearTimeout(timer);
-      const duration = media.duration;
-      cleanup();
-      if (!Number.isFinite(duration) || duration <= 0)
-        reject(new Error("This file does not have a valid duration."));
-      else resolve(duration);
-    };
-    media.onerror = () => {
-      clearTimeout(timer);
-      cleanup();
-      reject(
-        new Error(
-          "This media format could not be read. Try a standard MP3, WAV or MP4 file.",
-        ),
-      );
-    };
-    media.src = url;
-  });
-}
-
-async function initializeStudio() {
-  const form = $<HTMLFormElement>("#generate-form");
+async function initializeOffers() {
+  const form = $<HTMLFormElement>("#offer-form");
   if (!form) return;
-  let library: Library = { assets: [], prompts: [], jobs: [] };
-  let allowances: Allowance[] = [];
-  let config: Config = {
+  let config: Config = await api("/api/config").catch(() => ({
     voices: [],
     generationEnabled: false,
     checkoutEnabled: false,
-    maxPresenterDuration: 30,
+  }));
+  let cart: OfferInput[] = [];
+  let quote: Quote | undefined;
+  let quoteId = "";
+  const duration = $<HTMLInputElement>("#offer-duration")!,
+    resolution = $<HTMLSelectElement>("#offer-resolution")!,
+    quantity = $<HTMLInputElement>("#offer-quantity")!,
+    style = $<HTMLSelectElement>("#offer-style")!,
+    delivery = $<HTMLSelectElement>("#offer-service")!;
+  const task = () =>
+    ($<HTMLInputElement>("input[name=taskType]:checked", form)?.value ||
+      "presenter") as TaskType;
+  const service = (): Service =>
+    delivery.value === "express"
+      ? "express"
+      : serviceFor(task(), style.value === "scene");
+  const note = $("#offer-status")!,
+    review = $<HTMLButtonElement>("#review-purchase")!,
+    pay = $<HTMLButtonElement>("#pay-purchase")!;
+  try {
+    const saved = sessionStorage.getItem("ahab-cart-v1");
+    if (saved) cart = JSON.parse(saved).slice(0, 12);
+  } catch {}
+  const invalidate = () => {
+    quote = undefined;
+    quoteId = "";
+    pay.hidden = true;
+    note.textContent = "";
   };
-  let mode: "presenter" | "video_reference" = "presenter";
-  let selectedImages: string[] = [];
-  let uploading = false;
-  let generating = false;
-  let portraitPending = false;
-  let pollTimer: ReturnType<typeof setTimeout>;
-  const allowanceSelect = $<HTMLSelectElement>("#allowance")!;
-  const durationSelect = $<HTMLSelectElement>("#duration")!;
-  const audioSelect = $<HTMLSelectElement>("#audio-reference")!;
-  const videoSelect = $<HTMLSelectElement>("#video-reference")!;
-  const sourceSelect = $<HTMLSelectElement>("#voice-source")!;
-  const script = $<HTMLTextAreaElement>("#script")!;
-  const direction = $<HTMLTextAreaElement>("#prompt")!;
-  const voice = $<HTMLSelectElement>("#voice-id")!;
-  const aspect = $<HTMLSelectElement>("#aspect-ratio")!;
-  const generateButton = $<HTMLButtonElement>("#generate-button")!;
-  const currentAllowance = () =>
-    allowances.find((item) => item.id === allowanceSelect.value);
-  const draft = sessionStorage.getItem("ahab-draft-prompt");
-  if (draft) {
-    direction.value = draft;
-    sessionStorage.removeItem("ahab-draft-prompt");
-  }
-  const renderAssets = () => {
-    $("#image-choices")!.innerHTML = library.assets
-      .filter((asset) => asset.kind === "image")
-      .map(
-        (asset) =>
-          `<button class="asset-choice ${selectedImages.includes(asset.id) ? "selected" : ""}" type="button" aria-label="Use ${escape(asset.name || "reference image")}" aria-pressed="${selectedImages.includes(asset.id)}" data-image-id="${escape(asset.id)}"><img src="${assetUrl(asset)}" alt="${escape(asset.name || "Saved reference")}" loading="lazy"/></button>`,
-      )
-      .join("");
-    $("#image-counter")!.textContent =
-      `${selectedImages.length} selected${mode === "video_reference" ? " · up to 2" : ""}`;
-    const audioValue = audioSelect.value;
-    audioSelect.innerHTML =
-      '<option value="">' +
-      (mode === "presenter" ? "Choose saved narration" : "No audio reference") +
-      "</option>" +
-      library.assets
-        .filter((asset) => asset.kind === "audio")
+  const render = () => {
+    sessionStorage.setItem("ahab-cart-v1", JSON.stringify(cart));
+    review.disabled = !cart.length;
+    $("#offer-cart")!.innerHTML =
+      cart
         .map(
-          (asset) =>
-            `<option value="${escape(asset.id)}">${escape(asset.name || "Audio")} · ${Math.round(asset.duration || 0)}s</option>`,
+          (i, index) =>
+            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s selected · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${generatedDuration(i.taskType, i.duration, i.service)}s generation target · ${i.service === "express" ? "Express" : "Standard"} · use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
         )
-        .join("");
-    if (library.assets.some((asset) => asset.id === audioValue))
-      audioSelect.value = audioValue;
-    const videoValue = videoSelect.value;
-    videoSelect.innerHTML =
-      '<option value="">No video reference</option>' +
-      library.assets
-        .filter((asset) => asset.kind === "video")
-        .map(
-          (asset) =>
-            `<option value="${escape(asset.id)}">${escape(asset.name || "Video reference")} · ${Math.round(asset.duration || 0)}s</option>`,
-        )
-        .join("");
-    if (library.assets.some((asset) => asset.id === videoValue))
-      videoSelect.value = videoValue;
-    updatePreview();
+        .join("") +
+      (quote
+        ? `<p class="quote-total">${money(quote.amountCents)} <small>USD · one time</small></p>`
+        : "");
   };
-  const updatePreview = () => {
-    const stage = $("#preview-stage")!;
-    const image = library.assets.find((item) => item.id === selectedImages[0]);
-    if (image)
-      stage.innerHTML = `<img src="${assetUrl(image)}" alt="Your selected reference image"/><span class="preview-label">REFERENCE IMAGE · NOT A GENERATED VIDEO</span>`;
-    else
-      stage.innerHTML =
-        '<div class="preview-placeholder"><span class="preview-mark">✧</span><strong>A little idea.<br/>A finished video.</strong><p>Select your face image<br/>to start setting the scene.</p></div>';
-    stage.style.aspectRatio = aspect.value.replace(":", "/");
-    $("#preview-format")!.textContent =
-      aspect.value +
-      " · " +
-      (aspect.value === "9:16"
-        ? "VERTICAL"
-        : aspect.value === "16:9"
-          ? "LANDSCAPE"
-          : "SQUARE");
-    $("#preview-duration")!.textContent =
-      (mode === "presenter" ? "UP TO " : "") + durationSelect.value + " SEC";
-    $("#preview-resolution")!.textContent =
-      mode === "presenter" ? "720P" : "768P";
-    const allowance = currentAllowance();
-    $("#preview-package")!.textContent =
-      allowance?.name || allowance?.packageId || "Choose a package";
-    generateButton.disabled =
-      !config.generationEnabled ||
-      !allowance ||
-      allowance.videosRemaining < 1 ||
-      uploading ||
-      generating;
-    $("#create-portrait")!.toggleAttribute(
-      "disabled",
-      !config.generationEnabled ||
-        !allowance ||
-        allowance.portraitsRemaining < 1 ||
-        generating ||
-        portraitPending,
-    );
-    $("#portrait-help")!.textContent = allowance
-      ? `${allowance.portraitsRemaining} portrait allowance${allowance.portraitsRemaining === 1 ? "" : "s"} remaining. Saved portraits count toward your 40 images.`
-      : "Choose a package with a portrait allowance to create a presenter.";
-  };
-  const updateDuration = () => {
-    const previous = Number(durationSelect.value);
-    const max =
-      mode === "video_reference"
-        ? 15
-        : Math.min(
-            currentAllowance()?.maxDuration || 30,
-            config.maxPresenterDuration || 30,
-          );
-    const values =
-      mode === "video_reference"
-        ? [5, 10, 15]
-        : [15, 30, 45, 60, 80, 90, 120].filter((value) => value <= max);
-    if (!values.length) values.push(Math.max(1, max));
-    durationSelect.innerHTML = values
-      .map(
-        (value) =>
-          `<option value="${value}">${mode === "presenter" ? "Up to " : ""}${value} seconds</option>`,
-      )
-      .join("");
-    durationSelect.value = String(
-      values.includes(previous) ? previous : values[values.length - 1],
-    );
-    $("#allowance-help")!.textContent = currentAllowance()
-      ? `${currentAllowance()!.videosRemaining} video allowance${currentAllowance()!.videosRemaining === 1 ? "" : "s"} remaining · presenter maximum ${currentAllowance()!.maxDuration}s.`
-      : "No available package yet. Choose a one-time package in Purchases.";
-    updatePreview();
-  };
-  const switchMode = (next: "presenter" | "video_reference") => {
-    mode = next;
-    $<HTMLInputElement>("[name=mode]")!.value = mode;
-    $$<HTMLButtonElement>("[data-mode]").forEach((button) =>
-      button.setAttribute(
-        "aria-selected",
-        String(button.dataset.mode === mode),
+  const update = () => {
+    const t = taskById(task())!;
+    $("#offer-style-field")!.hidden = t.id !== "explainer";
+    const s = serviceFor(t.id, style.value === "scene");
+    duration.min = String(t.min);
+    duration.max = String(t.id === "explainer" && s === "scene" ? 30 : t.max);
+    duration.value = String(
+      Math.max(
+        t.min,
+        Math.min(Number(duration.max), Number(duration.value) || t.min),
       ),
     );
-    $("#scene-options")!.hidden = mode === "presenter";
-    $("#presenter-options")!.hidden = mode !== "presenter";
-    $("#caption-field")!.hidden = mode !== "presenter";
-    $("#mode-description")!.textContent =
-      mode === "presenter"
-        ? "A talking presenter made from one face image and your script or narration. Best for an introduction, explainer or new ad hook."
-        : "A short scene guided by your direction and optional references. Up to two images, one 5-second video and one 15-second audio reference.";
-    $("#image-heading")!.textContent =
-      mode === "presenter" ? "Give it a face" : "Set your visual references";
-    $("#image-help")!.textContent =
-      mode === "presenter"
-        ? "Choose one clear portrait. Use a face you have permission to use."
-        : "Choose up to two images to guide your scene. Images are optional when you describe the scene clearly.";
-    $("#direction-optional")!.hidden = true;
-    $("#direction-help")!.textContent =
-      mode === "presenter"
-        ? "Describe delivery and motion. Your script stays separate so your presenter knows what to say."
-        : "Describe the scene, action and camera movement. References guide the result; exact actions are not guaranteed.";
-    direction.placeholder =
-      mode === "presenter"
-        ? "Keep it warm and natural, like explaining something to a friend."
-        : "A creator opens a small parcel at a kitchen counter, pauses, then reacts with a delighted smile. Natural handheld camera…";
-    $("#duration-note")!.textContent =
-      mode === "presenter"
-        ? "Vertical video fits TikTok and Shorts. Choose a duration that gives your script room; speech timing can vary."
-        : "One clip uses one video allowance. Longer clips and automatic stitching are not available.";
-    if (mode === "presenter") selectedImages = selectedImages.slice(0, 1);
-    updateAudio();
-    renderAssets();
-    updateDuration();
+    const old = delivery.value;
+    delivery.innerHTML =
+      option("standard", "Standard") +
+      (config.expressEnabled && s === "scene"
+        ? option("express", "Express")
+        : "");
+    if (old === "express" && config.expressEnabled && s === "scene")
+      delivery.value = old;
+    $("#offer-duration-note")!.textContent =
+      `${duration.value}s selected → ${generatedDuration(t.id, Number(duration.value), service())}s generation target. Extra time is included. Each allowance makes one video.`;
   };
-  const updateAudio = () => {
-    const uploaded =
-      mode === "video_reference" || sourceSelect.value === "upload";
-    $("#audio-field")!.hidden = !uploaded;
-    $("#voice-field")!.hidden = uploaded;
-    $("#script-field")!.hidden = uploaded;
-    $("#audio-label")!.textContent =
-      mode === "presenter"
-        ? "Uploaded narration"
-        : "Audio reference · optional";
-    $("#audio-help")!.textContent =
-      mode === "presenter"
-        ? "Your recording supplies the presenter’s voice. It must fit your selected duration."
-        : "Ahab accepts references up to 15 seconds. It guides the scene; exact voice or lip-sync is not promised.";
-    $("#audio-upload-heading")!.textContent =
-      mode === "presenter"
-        ? "Upload your narration"
-        : "Upload a scene audio reference";
-    $("#audio-upload-limits")!.textContent =
-      `MP3 or WAV · ${mode === "video_reference" ? "up to 15 seconds and " : ""}16 MB`;
-  };
-  const renderJobs = () => {
-    const active = library.jobs.filter(
-      (job) => !["failed", "completed"].includes(job.status),
+  form.addEventListener("change", update);
+  duration.addEventListener("input", () => {
+    if (duration.checkValidity()) update();
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (cart.length >= 12) {
+      note.textContent = "Buy up to 12 configurations in one purchase.";
+      return;
+    }
+    invalidate();
+    cart.push({
+      taskType: task(),
+      service: service(),
+      duration: Number(duration.value),
+      resolution: resolution.value as Resolution,
+      quantity: Number(quantity.value),
+    });
+    render();
+  });
+  $("#add-image-credit")!.addEventListener("click", () => {
+    if (cart.length >= 12) return;
+    invalidate();
+    cart.push({
+      taskType: "presenter",
+      service: "image",
+      duration: 0,
+      resolution: "1080p",
+      quantity: 1,
+    });
+    render();
+  });
+  $("#offer-cart")!.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(
+      "[data-remove-cart]",
     );
-    $("#recent-jobs")!.hidden = !active.length;
-    $("#studio-jobs")!.innerHTML = jobsMarkup(active);
-  };
-  const refresh = async () => {
-    const [lib, purchases] = await Promise.all([
-      api<Library>("/api/library"),
-      api("/api/purchases"),
-    ]);
-    library = {
-      assets: lib.assets || [],
-      prompts: lib.prompts || [],
-      jobs: lib.jobs || [],
+    if (!b) return;
+    cart.splice(Number(b.dataset.removeCart), 1);
+    invalidate();
+    render();
+  });
+  review.addEventListener("click", async () => {
+    review.disabled = true;
+    note.textContent = "Checking your purchase…";
+    try {
+      const me = await api("/api/auth/me");
+      const result = await post(
+        me.user ? "/api/quotes" : "/api/quote-preview",
+        { items: cart },
+      );
+      quote = result;
+      quoteId = result.quoteId || "";
+      render();
+      pay.hidden = false;
+      pay.textContent = me.user ? "Continue to payment" : "Sign in to purchase";
+      pay.disabled = !!me.user && !config.checkoutEnabled;
+      note.textContent = !me.user
+        ? "Your total is shown above. Sign in to keep allowances in your account."
+        : config.checkoutEnabled
+          ? "Review the total above. Payment adds allowances; it does not start generation."
+          : config.checkoutReason || "Purchases are currently unavailable.";
+    } catch (e) {
+      note.textContent = showError(e);
+    } finally {
+      review.disabled = !cart.length;
+    }
+  });
+  pay.addEventListener("click", async () => {
+    if (!quoteId) {
+      location.assign("/signin?next=" + encodeURIComponent("/purchases"));
+      return;
+    }
+    pay.disabled = true;
+    try {
+      const r = await post("/api/checkout", { quoteId });
+      const url = new URL(r.url);
+      if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com")
+        throw new Error("The payment page could not be verified.");
+      location.assign(url.href);
+    } catch (e) {
+      note.textContent = showError(e);
+      pay.disabled = false;
+    }
+  });
+  update();
+  render();
+}
+async function preparePortraitAsset(id: string): Promise<Asset> {
+  const image = new Image();
+  image.src = "/api/media/" + encodeURIComponent(id);
+  await image.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = 540;
+  canvas.height = 960;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Image preparation is unavailable.");
+  const scale = Math.max(540 / image.naturalWidth, 960 / image.naturalHeight),
+    w = image.naturalWidth * scale,
+    h = image.naturalHeight * scale;
+  context.drawImage(image, (540 - w) / 2, (960 - h) / 2, w, h);
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (v) => (v ? resolve(v) : reject(new Error("Image preparation failed."))),
+      "image/jpeg",
+      0.93,
+    ),
+  );
+  const form = new FormData();
+  form.set("kind", "image");
+  form.set(
+    "file",
+    new File([blob], "Prepared-reference-540x960.jpg", { type: "image/jpeg" }),
+  );
+  return (await api("/api/media", { method: "POST", body: form })).asset;
+}
+async function initializeStudio() {
+  const form = $<HTMLFormElement>("#generate-form");
+  if (!form) return;
+  let library: Library = { assets: [], prompts: [], jobs: [] },
+    allowances: Allowance[] = [],
+    config: Config = {
+      voices: [],
+      generationEnabled: false,
+      checkoutEnabled: false,
     };
-    allowances = purchases.allowances || [];
-    const selected =
-      allowanceSelect.value ||
-      new URLSearchParams(location.search).get("allowance");
-    allowanceSelect.innerHTML =
+  let images: string[] = [];
+  let rawDirection = "";
+  let shotPlan: string[] = [];
+  let running = false;
+  let key = crypto.randomUUID();
+  let imageKey = crypto.randomUUID();
+  let preparationKey = crypto.randomUUID();
+  let polling: ReturnType<typeof setTimeout>;
+  const task = $<HTMLSelectElement>("#task-type")!,
+    style = $<HTMLSelectElement>("#studio-style")!,
+    duration = $<HTMLInputElement>("#duration")!,
+    resolution = $<HTMLSelectElement>("#resolution")!,
+    delivery = $<HTMLSelectElement>("#studio-service")!,
+    allowance = $<HTMLSelectElement>("#allowance")!,
+    imageAllowance = $<HTMLSelectElement>("#image-allowance")!,
+    script = $<HTMLTextAreaElement>("#script")!,
+    direction = $<HTMLTextAreaElement>("#prompt")!,
+    approved = $<HTMLInputElement>("#approved")!,
+    generate = $<HTMLButtonElement>("#generate-button")!,
+    audio = $<HTMLSelectElement>("#audio-reference")!,
+    source = $<HTMLSelectElement>("#voice-source")!;
+  const service = (): Service =>
+    delivery.value === "express"
+      ? "express"
+      : serviceFor(task.value as TaskType, style.value === "scene");
+  const selectedAllowance = () =>
+    allowances.find((a) => a.id === allowance.value);
+  const render = () => {
+    const t = taskById(task.value)!;
+    $("#task-description")!.textContent = t.description;
+    $("#studio-style-field")!.hidden = t.id !== "explainer";
+    const base = serviceFor(t.id, style.value === "scene");
+    duration.min = String(t.min);
+    duration.max = String(
+      t.id === "explainer" && base === "scene" ? 30 : t.max,
+    );
+    duration.value = String(
+      Math.max(
+        t.min,
+        Math.min(Number(duration.max), Number(duration.value) || t.min),
+      ),
+    );
+    const chosen = delivery.value;
+    delivery.innerHTML =
+      option("standard", "Standard") +
+      (config.expressEnabled && base === "scene"
+        ? option("express", "Express")
+        : "");
+    if (chosen === "express" && config.expressEnabled && base === "scene")
+      delivery.value = chosen;
+    const s = service(),
+      actual = generatedDuration(t.id, Number(duration.value), s);
+    $("#duration-note")!.textContent =
+      `${duration.value}s selected → ${actual}s generation target. Extra time is included. One allowance is used, even for a shorter video.`;
+    $("#preview-duration")!.textContent =
+      `${duration.value}s selected · ${actual}s target`;
+    $("#preview-resolution")!.textContent = resolution.value.toUpperCase();
+    $("#presenter-options")!.hidden = s !== "presenter";
+    $("#scene-input-note")!.hidden = s === "presenter";
+    $("#voice-field")!.hidden = source.value !== "ai";
+    $("#audio-field")!.hidden = source.value !== "upload";
+    const previous = allowance.value;
+    allowance.innerHTML =
+      option("", "Choose a compatible allowance") +
       allowances
         .filter(
-          (item) => item.videosRemaining > 0 || item.portraitsRemaining > 0,
+          (a) =>
+            a.videosRemaining > 0 &&
+            compatible(
+              a,
+              t.id,
+              s,
+              Number(duration.value),
+              resolution.value as Resolution,
+            ),
         )
-        .map(
-          (item) =>
-            `<option value="${escape(item.id)}">${escape(item.name || item.packageId)} · ${item.videosRemaining} video${item.videosRemaining === 1 ? "" : "s"} left · up to ${item.maxDuration}s</option>`,
+        .map((a) => option(a.id, `${a.name} · ${a.videosRemaining} remaining`))
+        .join("");
+    if ([...allowance.options].some((o) => o.value === previous))
+      allowance.value = previous;
+    else if (allowance.options.length === 2) allowance.selectedIndex = 1;
+    const imagePrevious = imageAllowance.value;
+    imageAllowance.innerHTML =
+      option("", "Choose an image allowance") +
+      allowances
+        .filter((a) => a.portraitsRemaining > 0)
+        .map((a) =>
+          option(
+            a.id,
+            `${a.name} · ${a.portraitsRemaining} image preparation${a.portraitsRemaining === 1 ? "" : "s"}`,
+          ),
         )
-        .join("") ||
-      '<option value="">No package yet — visit Purchases</option>';
-    if (allowances.some((item) => item.id === selected))
-      allowanceSelect.value = selected!;
-    selectedImages = selectedImages.filter((id) =>
-      library.assets.some((asset) => asset.id === id),
-    );
-    renderAssets();
-    updateDuration();
-    renderJobs();
+        .join("");
+    if ([...imageAllowance.options].some((o) => o.value === imagePrevious))
+      imageAllowance.value = imagePrevious;
+    else if (imageAllowance.options.length > 1)
+      imageAllowance.selectedIndex = 1;
+    $("#script-count")!.textContent =
+      `${script.value.trim().split(/\s+/).filter(Boolean).length} words · about ${Math.ceil(script.value.trim().split(/\s+/).filter(Boolean).length / 2.5)} seconds of speech (estimate)`;
+    generate.disabled =
+      running ||
+      !config.generationEnabled ||
+      !selectedAllowance() ||
+      !approved.checked ||
+      !direction.value.trim() ||
+      images.length > 1 ||
+      (s === "presenter" &&
+        (!images.length || (!script.value.trim() && source.value === "ai"))) ||
+      (["demo", "unboxing", "showcase"].includes(t.id) && !images.length);
+    const chosenImage = library.assets.find((a) => a.id === images[0]);
+    const preview = $("#preview-stage")!;
+    if (chosenImage)
+      preview.innerHTML = `<img src="${assetUrl(chosenImage)}" alt="Selected reference" style="width:100%;height:100%;object-fit:contain"/>`;
+    $("#image-counter")!.textContent =
+      `${images.length} selected${images.length > 1 ? " · combine before video" : ""}`;
+    $("#image-choices")!.innerHTML = library.assets
+      .filter((a) => a.kind === "image")
+      .map(
+        (a) =>
+          `<button type="button" class="asset-choice ${images.includes(a.id) ? "selected" : ""}" data-image-id="${escape(a.id)}" aria-pressed="${images.includes(a.id)}" aria-label="Use ${escape(a.name)}"><img src="${assetUrl(a)}" alt="${escape(a.name)}" loading="lazy"/></button>`,
+      )
+      .join("");
+    const old = audio.value;
+    audio.innerHTML =
+      option("", "Choose saved narration") +
+      library.assets
+        .filter((a) => a.kind === "audio")
+        .map((a) => option(a.id, `${a.name} · ${Math.round(a.duration || 0)}s`))
+        .join("");
+    audio.value = old;
+    $("#studio-jobs")!.innerHTML = library.jobs.length
+      ? jobsMarkup(library.jobs)
+      : '<p class="muted">Your generation progress will appear here.</p>';
   };
-  const pollJob = async (id: string) => {
-    clearTimeout(pollTimer);
+  const refresh = async () => {
+    const [l, p, c] = await Promise.all([
+      api<Library>("/api/library"),
+      api("/api/purchases"),
+      api<Config>("/api/config"),
+    ]);
+    library = l;
+    allowances = p.allowances;
+    config = c;
+    $<HTMLSelectElement>("#voice-id")!.innerHTML = config.voices
+      .map((v) => option(v.id, v.name))
+      .join("");
+    render();
+    const notice = $("#studio-availability")!;
+    notice.hidden = config.generationEnabled;
+    if (!notice.hidden)
+      notice.textContent =
+        config.reason ||
+        "Generation is currently unavailable. Your allowances are safe.";
+  };
+  const watch = async (id: string) => {
     try {
-      const result = await api(`/api/jobs/${encodeURIComponent(id)}`);
-      const job: Job = result.job || result;
-      const node = $("#generation-status")!;
-      node.hidden = false;
+      const { job } = await api<{ job: Job }>(`/api/jobs/${id}`);
+      const status = $("#generation-status")!;
+      status.hidden = false;
+      status.textContent =
+        statusLabel(job.status) + (job.error ? ": " + job.error : "");
       if (job.status === "completed") {
-        node.innerHTML =
-          'Your take is ready. <a href="/library">Open your library to watch and download it →</a>';
-        generating = false;
+        if (job.assetId && job.kind !== "portrait") {
+          status.innerHTML = `<video controls playsinline src="/api/media/${encodeURIComponent(job.assetId)}" style="width:100%"></video><a class="button secondary full" href="/api/media/${encodeURIComponent(job.assetId)}?download=1" download>Download video</a>`;
+        }
+        await refresh();
+        if (job.kind === "portrait" && job.assetId) {
+          try {
+            const prepared = await preparePortraitAsset(job.assetId);
+            await refresh();
+            images = [prepared.id];
+          } catch {
+            images = [job.assetId];
+            $("#portrait-status")!.textContent =
+              "Your original image is saved. Automatic resizing could not finish; review its framing before use.";
+          }
+          render();
+        }
+        return;
+      }
+      if (job.status === "failed" || job.status === "uncertain") {
         await refresh();
         return;
       }
-      if (job.status === "failed") {
-        node.textContent =
-          job.error ||
-          "This generation failed. Its allowance has been restored.";
-        generating = false;
-        await refresh();
-        return;
-      }
-      node.textContent =
-        statusLabel(job.status) +
-        ". You can leave this page; your take keeps going. Find it in your library.";
-      pollTimer = setTimeout(() => pollJob(id), 6000);
+      polling = setTimeout(() => void watch(id), 5000);
     } catch {
-      const node = $("#generation-status")!;
-      node.hidden = false;
-      node.innerHTML =
-        'We could not check progress just now. <a href="/library">Check your library for the latest status.</a>';
-      generating = false;
-      updatePreview();
+      polling = setTimeout(() => void watch(id), 10000);
     }
   };
   try {
-    config = await api<Config>("/api/config");
-    config.voices ??= [];
-    voice.innerHTML = config.voices.length
-      ? config.voices
-          .map(
-            (item) =>
-              `<option value="${escape(item.id)}">${escape(item.name)}</option>`,
-          )
-          .join("")
-      : '<option value="">AI voices are not available yet</option>';
-    if (!config.voices.length) {
-      sourceSelect.value = "upload";
-      updateAudio();
-    }
     await refresh();
+    const requested = new URLSearchParams(location.search).get("allowance");
+    const a = allowances.find((v) => v.id === requested);
+    if (a && a.service !== "image" && !a.legacy) {
+      task.value = (a as any).taskType || "presenter";
+      style.value = a.service === "presenter" ? "presenter" : "scene";
+      duration.value = String(a.maxDuration);
+      resolution.value = a.resolution;
+      render();
+      if (a.service === "express") delivery.value = "express";
+      render();
+      allowance.value = a.id;
+    }
     const requestedImage = new URLSearchParams(location.search).get("image");
-    if (
-      requestedImage &&
-      library.assets.some(
-        (asset) => asset.id === requestedImage && asset.kind === "image",
-      )
-    ) {
-      selectedImages = [requestedImage];
-      renderAssets();
+    if (library.assets.some((a) => a.id === requestedImage))
+      images = [requestedImage!];
+    const draft = sessionStorage.getItem("ahab-draft-prompt");
+    if (draft) {
+      direction.value = draft;
+      sessionStorage.removeItem("ahab-draft-prompt");
     }
-    if (!config.generationEnabled) {
-      const notice = $("#studio-availability")!;
-      notice.hidden = false;
-      notice.innerHTML =
-        'Generation is not open yet. Explore the studio and save your references. <a class="text-link" href="/purchases">Payment availability is shown in Purchases.</a>';
-    }
-  } catch (error) {
-    $("#generation-error")!.textContent = showError(error);
-    $("#generation-error")!.classList.add("error");
+    render();
+    for (const job of library.jobs.filter(
+      (j) => !["completed", "failed", "uncertain"].includes(j.status),
+    ))
+      void watch(job.id);
+  } catch (e) {
+    $("#generation-error")!.textContent = showError(e);
   }
-  $$<HTMLButtonElement>("[data-mode]").forEach((button) => {
-    button.addEventListener("click", () =>
-      switchMode(button.dataset.mode as "presenter" | "video_reference"),
-    );
-    button.addEventListener("keydown", (event) => {
-      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-      event.preventDefault();
-      const other = $$<HTMLButtonElement>("[data-mode]").find(
-        (item) => item !== button,
-      );
-      if (other) {
-        other.click();
-        other.focus();
-      }
-    });
-  });
-  $("#image-choices")?.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
-      "[data-image-id]",
-    );
-    if (!button) return;
-    const id = button.dataset.imageId!;
-    if (selectedImages.includes(id))
-      selectedImages = selectedImages.filter((item) => item !== id);
-    else if (mode === "presenter") selectedImages = [id];
-    else if (selectedImages.length < 2) selectedImages.push(id);
-    else toast("Choose up to two reference images.");
-    renderAssets();
-  });
-  sourceSelect.addEventListener("change", updateAudio);
-  allowanceSelect.addEventListener("change", updateDuration);
-  durationSelect.addEventListener("change", updatePreview);
-  aspect.addEventListener("change", updatePreview);
-  videoSelect.addEventListener("change", () => {
-    if (videoSelect.value && mode !== "video_reference")
-      switchMode("video_reference");
-  });
-  script.addEventListener("input", () => {
-    const words = script.value.trim()
-      ? script.value.trim().split(/\s+/).length
-      : 0;
-    $("#script-count")!.textContent =
-      `${words} words · about ${Math.max(1, Math.round(words / 2.4))} seconds spoken`;
-  });
-  $("#portrait-toggle")?.addEventListener("click", () => {
-    $("#portrait-fields")!.hidden = !$("#portrait-fields")!.hidden;
-  });
-  $("#save-prompt")?.addEventListener("click", async () => {
-    if (!direction.value.trim()) {
-      toast("Write a creative direction to save first.");
+  form.addEventListener("input", (e) => {
+    if ((e.target as HTMLElement).id === "prompt")
+      rawDirection = direction.value;
+    if ((e.target as HTMLElement).id !== "approved") approved.checked = false;
+    if (
+      (e.target as HTMLElement).id === "duration" &&
+      !duration.checkValidity()
+    )
       return;
-    }
-    try {
-      await post("/api/prompts", { text: direction.value });
-      toast("Prompt saved to your library.");
-    } catch (error) {
-      toast(showError(error));
-    }
+    render();
+  });
+  form.addEventListener("change", () => render());
+  $("#image-choices")!.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-image-id]");
+    if (!b) return;
+    const id = b.dataset.imageId!;
+    if (images.includes(id)) images = images.filter((v) => v !== id);
+    else images = images.length < 2 ? [...images, id] : [id];
+    approved.checked = false;
+    render();
   });
   $$<HTMLInputElement>("[data-upload]").forEach((input) =>
     input.addEventListener("change", async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const kind = input.dataset.upload!;
-      uploading = true;
-      updatePreview();
-      const node = $("#upload-status")!;
-      node.textContent = "Checking and saving your file…";
-      node.classList.remove("error");
+      input.disabled = true;
+      const out = $("#upload-status")!;
       try {
-        if (kind === "image") {
-          if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
-            throw new Error("Choose a JPG, PNG or WebP image.");
-          if (file.size > 10 * 1024 * 1024)
-            throw new Error("Images must be 10 MB or smaller.");
-        } else {
-          if (file.size > 16 * 1024 * 1024)
-            throw new Error("Audio and video files must be 16 MB or smaller.");
-        }
-        const duration = kind === "image" ? 0 : await mediaDuration(file);
-        const max =
-          kind === "video"
-            ? 5
-            : mode === "video_reference"
-              ? 15
-              : Math.min(
-                  currentAllowance()?.maxDuration || 30,
-                  config.maxPresenterDuration || 30,
-                );
-        if (duration > max + 0.05)
-          throw new Error(
-            `${kind === "video" ? "Video references" : "This audio"} must be ${max} seconds or shorter.`,
-          );
-        const upload = new FormData();
-        upload.set("file", file);
-        upload.set("kind", kind);
-        if (duration) upload.set("duration", String(duration));
-        const result = await api("/api/media", {
-          method: "POST",
-          body: upload,
-        });
+        out.textContent = "Saving your file…";
+        const body = new FormData();
+        body.set("file", file);
+        body.set("kind", input.dataset.upload!);
+        const r = await api("/api/media", { method: "POST", body });
         await refresh();
-        const asset: Asset = result.asset || result;
-        if (asset.id) {
-          if (kind === "image")
-            selectedImages =
-              mode === "presenter"
-                ? [asset.id]
-                : [...selectedImages, asset.id].slice(-2);
-          if (kind === "audio") audioSelect.value = asset.id;
-          if (kind === "video") {
-            switchMode("video_reference");
-            videoSelect.value = asset.id;
-          }
-          renderAssets();
-        }
-        node.textContent = "Saved to your library.";
-        toast("Reference saved.");
-      } catch (error) {
-        node.textContent = showError(error);
-        node.classList.add("error");
+        if (r.asset.kind === "image") images = [r.asset.id];
+        if (r.asset.kind === "audio") audio.value = r.asset.id;
+        out.textContent = "Saved to your library.";
+        render();
+      } catch (e) {
+        out.textContent = showError(e);
       } finally {
-        uploading = false;
         input.value = "";
-        updatePreview();
+        input.disabled = false;
       }
     }),
   );
-  const pollPortrait = async (id: string) => {
-    const node = $("#portrait-status")!;
+  $("#save-prompt")!.addEventListener("click", async () => {
     try {
-      const result = await api(`/api/jobs/${encodeURIComponent(id)}`);
-      const job: Job = result.job || result;
-      if (job.status === "completed") {
-        portraitPending = false;
-        await refresh();
-        if (
-          job.assetId &&
-          library.assets.some((asset) => asset.id === job.assetId)
-        ) {
-          selectedImages = [job.assetId];
-          renderAssets();
-        }
-        node.textContent = "Your portrait is ready and saved to your images.";
-        return;
-      }
-      if (job.status === "failed") {
-        portraitPending = false;
-        await refresh();
-        node.textContent =
-          job.error ||
-          "Portrait generation failed. Its allowance has been restored.";
-        node.classList.add("error");
-        return;
-      }
-      node.textContent =
-        statusLabel(job.status) +
-        ". You can leave this page and find the portrait in your library.";
-      setTimeout(() => pollPortrait(id), 6000);
-    } catch {
-      portraitPending = false;
-      node.textContent =
-        "Progress could not be checked. Check your library before trying again.";
-      updatePreview();
+      await post("/api/prompts", { text: direction.value });
+      toast("Prompt saved.");
+    } catch (e) {
+      toast(showError(e));
     }
-  };
-  $("#create-portrait")?.addEventListener("click", async () => {
-    const button = $<HTMLButtonElement>("#create-portrait")!;
-    const node = $("#portrait-status")!;
-    const prompt = $<HTMLTextAreaElement>("#portrait-prompt")!.value.trim();
-    if (!prompt) {
-      node.textContent = "Describe the presenter you want to create.";
-      node.classList.add("error");
-      return;
-    }
+  });
+  $("#prepare-text")!.addEventListener("click", async () => {
+    const button = $<HTMLButtonElement>("#prepare-text")!;
     button.disabled = true;
-    portraitPending = true;
-    node.classList.remove("error");
-    node.textContent =
-      "Creating your portrait. This uses one portrait allowance.";
+    const out = $("#prepare-status")!;
     try {
-      const result = await post("/api/portraits", {
-        allowanceId: allowanceSelect.value,
-        prompt,
-        aspectRatio: "9:16",
+      out.textContent = "Preparing your script and shot plan…";
+      const r = await post("/api/prepare", {
+        allowanceId: allowance.value,
+        requestKey: preparationKey,
+        prompt: direction.value,
+        userPrompt: rawDirection || direction.value,
+        script: script.value,
+        wording: $<HTMLSelectElement>("#wording")!.value,
+        style: $<HTMLSelectElement>("#delivery-style")!.value,
+        taskType: task.value,
+        duration: Number(duration.value),
       });
-      if (result.asset?.id) {
-        portraitPending = false;
-        await refresh();
-        selectedImages = [result.asset.id];
-        renderAssets();
-        node.textContent = "Your portrait is ready and selected.";
-      } else if (result.job?.id || result.id) {
-        node.textContent =
-          "Your portrait is being made. It will appear in your library.";
-        void pollPortrait(result.job?.id || result.id);
-      } else {
-        portraitPending = false;
-        await refresh();
-        node.textContent =
-          "Your portrait request was accepted. Check your library.";
-      }
-    } catch (error) {
-      portraitPending = false;
-      node.textContent = showError(error);
-      node.classList.add("error");
+      if (!rawDirection) rawDirection = direction.value;
+      shotPlan = r.preparation.shots;
+      script.value = r.preparation.script;
+      direction.value = r.preparation.direction;
+      const shots = $("#shot-plan")!;
+      shots.hidden = false;
+      shots.innerHTML = `<strong>Suggested shot plan</strong><ol>${r.preparation.shots.map((s: string) => `<li>${escape(s)}</li>`).join("")}</ol>`;
+      out.textContent = "Review or edit this before generating.";
+      approved.checked = false;
+      preparationKey = crypto.randomUUID();
+      render();
+    } catch (e) {
+      out.textContent = showError(e);
     } finally {
-      updatePreview();
+      button.disabled = false;
     }
   });
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const errorNode = $("#generation-error")!;
-    errorNode.textContent = "";
-    errorNode.classList.remove("error");
-    const narration = mode === "presenter" && sourceSelect.value === "upload";
+  $("#create-portrait")!.addEventListener("click", async () => {
+    const button = $<HTMLButtonElement>("#create-portrait")!;
+    button.disabled = true;
     try {
-      if (!currentAllowance())
-        throw new Error("Choose a package in Purchases before generating.");
-      if (mode === "presenter" && selectedImages.length !== 1)
-        throw new Error("Choose one face image for your presenter.");
-      if (mode === "presenter" && !narration && !script.value.trim())
-        throw new Error("Write what your presenter should say.");
-      if (mode === "presenter" && !narration && !voice.value)
-        throw new Error("Choose a supported AI voice or upload narration.");
-      if (narration && !audioSelect.value)
-        throw new Error("Choose or upload your narration.");
-      if (!direction.value.trim())
-        throw new Error(
-          mode === "video_reference"
-            ? "Describe the scene you want to create."
-            : "Add a little creative direction for your presenter’s delivery.",
-        );
-      const audio = library.assets.find(
-        (asset) => asset.id === audioSelect.value,
-      );
-      if (
-        audio &&
-        audio.duration &&
-        audio.duration >
-          (mode === "video_reference" ? 15 : Number(durationSelect.value)) +
-            0.05
-      )
-        throw new Error(
-          "Your audio is longer than this take. Choose a shorter recording or a longer presenter duration.",
-        );
-      generating = true;
-      updatePreview();
-      const body = {
-        allowanceId: allowanceSelect.value,
-        mode,
-        prompt: direction.value.trim(),
-        ...(mode === "presenter" && !narration
-          ? { script: script.value.trim(), voiceId: voice.value }
-          : {}),
-        imageIds: selectedImages,
-        ...((mode === "video_reference" || narration) && audioSelect.value
-          ? { audioId: audioSelect.value }
-          : {}),
-        ...(mode === "video_reference" && videoSelect.value
-          ? { videoId: videoSelect.value }
-          : {}),
-        duration: Number(durationSelect.value),
-        aspectRatio: aspect.value,
-        caption:
-          mode === "presenter" &&
-          $<HTMLInputElement>("[name=caption]")!.checked,
-      };
-      const result = await post("/api/generate", body);
-      const id = result.job?.id || result.id;
-      if (!id)
-        throw new Error(
-          "Your request was accepted but its progress link is unavailable. Check your library before trying again.",
-        );
-      const node = $("#generation-status")!;
-      node.hidden = false;
-      node.textContent =
-        "Your take is queued. You can leave this page; it keeps going in the background.";
+      const r = await post("/api/portraits", {
+        allowanceId: imageAllowance.value,
+        requestKey: imageKey,
+        prompt: $<HTMLTextAreaElement>("#portrait-prompt")!.value,
+        imageIds: images,
+        modify: images.length > 0,
+      });
+      imageKey = crypto.randomUUID();
+      $("#portrait-status")!.textContent =
+        "Preparing your image. Progress appears in your studio.";
+      void watch(r.job.id);
       await refresh();
-      pollJob(id);
-    } catch (error) {
-      errorNode.textContent = showError(error);
-      errorNode.classList.add("error");
-      generating = false;
-      updatePreview();
+    } catch (e) {
+      $("#portrait-status")!.textContent = showError(e);
+    } finally {
+      button.disabled = false;
     }
   });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (running) return;
+    running = true;
+    render();
+    try {
+      const r = await post("/api/generate", {
+        allowanceId: allowance.value,
+        requestKey: key,
+        taskType: task.value,
+        service: service(),
+        resolution: resolution.value,
+        duration: Number(duration.value),
+        prompt: direction.value,
+        userPrompt: rawDirection || direction.value,
+        script: script.value,
+        imageIds: images,
+        shots: shotPlan,
+        approved: approved.checked,
+        ...(service() === "presenter"
+          ? source.value === "upload"
+            ? { audioId: audio.value }
+            : { voiceId: $<HTMLSelectElement>("#voice-id")!.value }
+          : {}),
+        caption: $<HTMLInputElement>("#caption")!.checked,
+      });
+      key = crypto.randomUUID();
+      approved.checked = false;
+      $("#generation-error")!.textContent = "";
+      void watch(r.job.id);
+      await refresh();
+    } catch (e) {
+      $("#generation-error")!.textContent = showError(e);
+    } finally {
+      running = false;
+      render();
+    }
+  });
+  window.addEventListener("pagehide", () => clearTimeout(polling));
 }
 void initializeLibrary();
 void initializePurchases();
+void initializeOffers();
 void initializeStudio();

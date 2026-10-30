@@ -299,7 +299,7 @@ function wav(bytes: Uint8Array): MediaInspection {
   return {
     mime: "audio/wav",
     extension: "wav",
-    duration: durationLimit(audioBytes / byteRate, 120),
+    duration: durationLimit(audioBytes / byteRate, 121),
     width: null,
     height: null,
   };
@@ -442,7 +442,7 @@ function mp3(bytes: Uint8Array): MediaInspection {
   return {
     mime: "audio/mpeg",
     extension: "mp3",
-    duration: durationLimit(seconds, 120),
+    duration: durationLimit(seconds, 121),
     width: null,
     height: null,
   };

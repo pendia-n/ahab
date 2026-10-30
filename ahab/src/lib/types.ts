@@ -14,6 +14,7 @@ export interface AhabEnv {
   AVATAR_LONG_DURATION_VERIFIED?: string;
   AHAB_AVATAR_VOICES?: string;
   AHAB_AVATAR_MAX_SECONDS_VERIFIED?: string;
+  EXPRESS_VERIFIED?: string;
 }
 export interface User {
   id: string;
@@ -51,4 +52,8 @@ export interface JobRow {
   error: string | null;
   created_at: number;
   updated_at: number;
+  service?: string;
+  resolution?: string;
+  task_type?: string;
+  selected_duration?: number;
 }

@@ -1,6 +1,5 @@
 import type { AhabEnv, JobRow, AssetRow } from "./types";
 import { HttpError, json, readJson, textValue } from "./http";
-import { estimateCents, validateDuration } from "./policy";
 import { ownedAsset, savePrompt } from "./media";
 import {
   buildVideoRequest,
@@ -9,6 +8,15 @@ import {
 } from "./openrouter";
 import { signJwt } from "./crypto";
 import { readiness } from "./payments";
+import {
+  validateOffer,
+  generatedDuration,
+  compatible,
+  type TaskType,
+  type Service,
+  type Resolution,
+} from "./offers";
+import { plannedCostCents, expressEnabled } from "./quotes";
 export async function jobById(env: AhabEnv, id: string) {
   return env.DB.prepare("SELECT * FROM jobs WHERE id=?")
     .bind(id)
@@ -18,7 +26,11 @@ export function publicJob(j: JobRow) {
   return {
     id: j.id,
     kind: j.kind,
-    mode: j.mode,
+    mode: j.mode === "video_reference" ? "scene" : j.mode,
+    taskType: j.task_type,
+    selectedDuration: j.selected_duration,
+    resolution: j.resolution,
+    service: j.service,
     duration: j.duration,
     status: j.status,
     assetId: j.asset_id,
@@ -49,7 +61,9 @@ export async function jobRequest(env: AhabEnv, job: JobRow) {
     );
   }
   return {
-    mode: job.mode as "presenter" | "video_reference",
+    mode: (job.service || job.mode) as
+      "presenter" | "scene" | "express" | "video_reference",
+    resolution: (job.resolution || "1080p") as Resolution,
     prompt: input.script || input.prompt,
     duration: job.duration,
     images: input.imageIds.map((id: string) => urls.get(id)),
@@ -75,79 +89,129 @@ export async function createGeneration(
       503,
       "Generation is temporarily unavailable. Your allowance has not changed.",
     );
-  const b = await readJson(request),
-    prompt = textValue(
-      b.prompt,
-      kind === "portrait" ? 6000 : 1000,
-      "Creative direction",
-    );
+  const b = await readJson(request);
+  const requestKey =
+    typeof b.requestKey === "string" &&
+    /^[a-zA-Z0-9_-]{12,100}$/.test(b.requestKey)
+      ? b.requestKey
+      : null;
+  if (!requestKey)
+    throw new HttpError(400, "Refresh the studio before generating.");
+  const prior = await env.DB.prepare(
+    "SELECT * FROM jobs WHERE user_id=? AND request_key=?",
+  )
+    .bind(userId, requestKey)
+    .first<JobRow>();
+  if (prior) return json({ job: publicJob(prior) }, 202);
+  const prompt = textValue(
+    b.prompt,
+    kind === "portrait" ? 6000 : 2000,
+    "Creative direction",
+  );
   const allowance = await env.DB.prepare(
     "SELECT * FROM allowances WHERE id=? AND user_id=?",
   )
     .bind(typeof b.allowanceId === "string" ? b.allowanceId : "", userId)
-    .first<{ id: string; max_duration: number }>();
-  if (!allowance) throw new HttpError(400, "Choose an available package.");
-  const mode = kind === "portrait" ? "portrait" : b.mode;
+    .first<any>();
+  if (!allowance) throw new HttpError(400, "Choose an available allowance.");
+  let mode = kind === "portrait" ? "portrait" : b.service;
   let duration = 0;
+  let selected = 0;
+  let task: TaskType = "presenter";
+  let resolution: Resolution = "1080p";
   const assets: AssetRow[] = [];
-  const input: any = { prompt, imageIds: [] };
+  const input: any = { prompt, imageIds: [], edit: !!b.modify };
   if (kind === "video") {
+    let choice;
     try {
-      duration = validateDuration(mode, b.duration, allowance.max_duration);
+      choice = validateOffer({ ...b, quantity: 1 }, expressEnabled(env));
     } catch (e) {
       throw new HttpError(400, (e as Error).message);
     }
-    if (b.aspectRatio && b.aspectRatio !== "9:16")
-      throw new HttpError(400, "Choose the vertical 9:16 format.");
+    if (choice.service === "image")
+      throw new HttpError(400, "Choose a video format.");
+    task = choice.taskType;
+    mode = choice.service;
+    selected = choice.duration;
+    resolution = choice.resolution;
+    duration = generatedDuration(task, selected, mode as Service);
     if (
-      !Array.isArray(b.imageIds) ||
-      b.imageIds.length > (mode === "presenter" ? 1 : 2) ||
-      b.imageIds.some((v: unknown) => typeof v !== "string")
+      !compatible(
+        {
+          service: allowance.service,
+          maxDuration: allowance.max_duration,
+          generatedCapacity: allowance.generated_capacity,
+          resolution: allowance.resolution,
+          legacy: allowance.service === "legacy",
+        },
+        task,
+        mode as Service,
+        selected,
+        resolution,
+      )
     )
-      throw new HttpError(400, "Choose supported reference images.");
-    if (mode === "presenter" && b.imageIds.length !== 1)
-      throw new HttpError(400, "Choose one face image.");
-    if (new Set(b.imageIds).size !== b.imageIds.length)
-      throw new HttpError(400, "Choose each reference image once.");
-    for (const id of b.imageIds) {
-      assets.push(await ownedAsset(env, id, userId, "image"));
-      input.imageIds.push(id);
-    }
+      throw new HttpError(
+        400,
+        "Choose an allowance that covers this format, duration and resolution.",
+      );
+    if (b.approved !== true)
+      throw new HttpError(
+        400,
+        "Review and approve your script and references first.",
+      );
+  }
+  if (
+    !Array.isArray(b.imageIds) ||
+    b.imageIds.length > (kind === "portrait" ? 2 : 1) ||
+    b.imageIds.some((v: unknown) => typeof v !== "string") ||
+    new Set(b.imageIds).size !== b.imageIds.length
+  )
+    throw new HttpError(
+      400,
+      "Choose one master reference image, or up to two images for preparation.",
+    );
+  for (const id of b.imageIds) {
+    assets.push(await ownedAsset(env, id, userId, "image"));
+    input.imageIds.push(id);
+  }
+  if (kind === "video") {
+    if (mode === "presenter" && input.imageIds.length !== 1)
+      throw new HttpError(400, "Choose an approved portrait first.");
+    if (
+      ["demo", "unboxing", "showcase"].includes(task) &&
+      !input.imageIds.length
+    )
+      throw new HttpError(
+        400,
+        "Choose a product reference or an approved combined image.",
+      );
+    if (b.videoId)
+      throw new HttpError(
+        400,
+        "Video-reference generation is not yet available for this service.",
+      );
     if (b.audioId) {
-      const a = await ownedAsset(env, String(b.audioId), userId, "audio");
-      const cap = mode === "presenter" ? duration : 15;
-      if (!a.duration || a.duration > cap)
+      if (mode !== "presenter")
         throw new HttpError(
           400,
-          `The selected audio must be ${cap} seconds or shorter.`,
+          "Uploaded narration is available for presenter videos.",
+        );
+      const a = await ownedAsset(env, String(b.audioId), userId, "audio");
+      if (!a.duration || a.duration > duration)
+        throw new HttpError(
+          400,
+          `Choose narration no longer than ${duration} seconds.`,
         );
       assets.push(a);
       input.audioId = a.id;
       input.audioDuration = a.duration;
     }
-    if (mode === "video_reference") {
-      if (!b.videoId) throw new HttpError(400, "Choose a video reference.");
-      const a = await ownedAsset(env, String(b.videoId), userId, "video");
-      if (!a.duration || a.duration > 5)
-        throw new HttpError(
-          400,
-          "Video references must be 5 seconds or shorter.",
-        );
-      assets.push(a);
-      input.videoId = a.id;
-      input.videoDuration = a.duration;
-      if (b.voiceId || b.caption)
-        throw new HttpError(
-          400,
-          "Voice selection and captions are available for presenter videos.",
-        );
-    } else {
-      if (b.videoId)
-        throw new HttpError(
-          400,
-          "Choose video-reference mode to use a video input.",
-        );
-      input.script = textValue(b.script || b.prompt, 12000, "Approved script");
+    if (mode === "presenter") {
+      input.script = input.audioId
+        ? typeof b.script === "string"
+          ? b.script.trim().slice(0, 12000)
+          : ""
+        : textValue(b.script, 12000, "Approved script");
       input.caption = !!b.caption;
       if (!input.audioId) {
         if (!getAvatarVoices(env).some((v) => v.id === b.voiceId))
@@ -157,6 +221,16 @@ export async function createGeneration(
           );
         input.voiceId = b.voiceId;
       }
+    } else {
+      const script =
+        typeof b.script === "string" ? b.script.trim().slice(0, 12000) : "";
+      const shots = Array.isArray(b.shots)
+        ? b.shots
+            .filter((s: unknown) => typeof s === "string")
+            .slice(0, 6)
+            .map((s: string) => s.slice(0, 500))
+        : [];
+      input.prompt = `${prompt}\n${script ? "Approved dialogue: " + script + "." : "No spoken dialogue."} ${shots.length ? "Shot plan: " + shots.join(" Then ") : ""} Keep product details and character identity consistent. No background music. No invented product claims.`;
     }
   }
   const id = crypto.randomUUID(),
@@ -181,13 +255,20 @@ export async function createGeneration(
       user_id: userId,
       allowance_id: allowance.id,
       kind,
-      mode,
+      mode: mode as any,
       duration,
+      service: kind === "video" ? mode : undefined,
+      resolution,
+      selected_duration: selected,
+      task_type: task,
       request_json: JSON.stringify(input),
       status: "queued",
       provider_id: null,
       asset_id: null,
-      estimate_cents: estimateCents(kind, mode, duration),
+      estimate_cents:
+        kind === "portrait"
+          ? 8
+          : plannedCostCents(mode as Service, duration, resolution),
       actual_cents: null,
       released: 0,
       error: null,
@@ -198,8 +279,9 @@ export async function createGeneration(
     if (kind === "video") {
       const fakeUrl = `${env.APP_URL}/api/provider/${id}/validation`;
       buildVideoRequest(env, {
-        mode,
-        prompt: input.script || prompt,
+        mode: mode as "presenter" | "scene" | "express",
+        resolution,
+        prompt: input.script || input.prompt,
         duration,
         images: input.imageIds.map(() => fakeUrl),
         audio: input.audioId
@@ -215,7 +297,7 @@ export async function createGeneration(
     }
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO jobs(id,user_id,allowance_id,kind,mode,duration,request_json,estimate_cents,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO jobs(id,user_id,allowance_id,kind,mode,duration,request_json,estimate_cents,created_at,updated_at,selected_duration,task_type,service,resolution,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       ).bind(
         id,
         userId,
@@ -227,6 +309,11 @@ export async function createGeneration(
         job.estimate_cents,
         now,
         now,
+        selected,
+        task,
+        kind === "video" ? mode : null,
+        resolution,
+        requestKey,
       ),
       ...assets.map((a, i) =>
         env.DB.prepare("INSERT INTO job_inputs VALUES(?,?,?,?,?)").bind(
@@ -250,6 +337,12 @@ export async function createGeneration(
           .run();
       }
     }
+    const duplicate = await env.DB.prepare(
+      "SELECT * FROM jobs WHERE user_id=? AND request_key=?",
+    )
+      .bind(userId, requestKey)
+      .first<JobRow>();
+    if (duplicate) return json({ job: publicJob(duplicate) }, 202);
     if (e instanceof HttpError) throw e;
     if (e instanceof OpenRouterError) throw new HttpError(e.status, e.message);
     if (String(e).includes("No generation allowance"))
@@ -261,7 +354,8 @@ export async function createGeneration(
       );
     throw e;
   }
-  await savePrompt(env, userId, prompt);
+  if (typeof b.userPrompt === "string" && b.userPrompt.trim())
+    await savePrompt(env, userId, b.userPrompt).catch(() => {});
   // A failed dispatch leaves a durable queued job. Scheduled reconciliation safely starts it.
   try {
     await env.GENERATION.create({ id, params: { jobId: id } });

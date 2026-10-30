@@ -41,6 +41,7 @@ class TestStatement {
 /** Exercise the real migration and SQL, while matching D1's asynchronous result shape. */
 export class TestDatabase {
   readonly sqlite = new DatabaseSync(":memory:");
+  private batchQueue: Promise<void> = Promise.resolve();
   constructor() {
     this.sqlite.exec(
       readFileSync(
@@ -48,12 +49,33 @@ export class TestDatabase {
         "utf8",
       ),
     );
-    this.sqlite.exec(readFileSync(new URL("../migrations/0002_remove_manual_funding_gate.sql",import.meta.url),"utf8"));
+    this.sqlite.exec(
+      readFileSync(
+        new URL(
+          "../migrations/0002_remove_manual_funding_gate.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    this.sqlite.exec(
+      readFileSync(
+        new URL("../migrations/0003_task_allowances.sql", import.meta.url),
+        "utf8",
+      ),
+    );
   }
   prepare(sql: string) {
     return new TestStatement(this, sql);
   }
   async batch(statements: TestStatement[]) {
+    // D1 serializes transactions; do not interleave BEGINs on this test connection.
+    const previous = this.batchQueue;
+    let release!: () => void;
+    this.batchQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
     this.sqlite.exec("BEGIN IMMEDIATE");
     try {
       const results = [];
@@ -63,6 +85,8 @@ export class TestDatabase {
     } catch (error) {
       this.sqlite.exec("ROLLBACK");
       throw error;
+    } finally {
+      release();
     }
   }
   row<T = Record<string, unknown>>(

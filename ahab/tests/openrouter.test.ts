@@ -32,12 +32,10 @@ const presenter = {
   captions: true,
 };
 const reference = {
-  mode: "video_reference" as const,
+  mode: "scene" as const,
   prompt: "A short vertical product reaction.",
   duration: 15,
-  images: [image, image],
-  video: { url: video, duration: 5 },
-  audio: { url: audio, duration: 15 },
+  images: [image],
 };
 
 afterEach(() => mock.restoreAll());
@@ -67,8 +65,8 @@ function mockCatalogAndCall(
             },
             {
               id: MODELS.video_reference,
-              supported_durations: Array.from({ length: 11 }, (_, i) => i + 5),
-              supported_resolutions: ["768p"],
+              supported_durations: Array.from({ length: 29 }, (_, i) => i + 2),
+              supported_resolutions: ["720p", "1080p"],
               supported_aspect_ratios: ["9:16"],
               allowed_passthrough_parameters: ["prompt_enhancement"],
             },
@@ -81,7 +79,7 @@ function mockCatalogAndCall(
             {
               id: MODELS.portrait,
               supported_parameters: {
-                resolution: { type: "enum", values: ["768"] },
+                resolution: { type: "enum", values: ["1K"] },
                 aspect_ratio: { type: "enum", values: ["9:16"] },
                 n: { type: "range", min: 1, max: 1 },
                 input_references: { type: "range", min: 0, max: 10 },
@@ -98,7 +96,7 @@ test("Avatar IV directly voices the approved text using a configured voice", () 
   const body = buildVideoRequest(env, presenter);
   assert.equal(body.model, MODELS.presenter);
   assert.equal(body.prompt, presenter.prompt);
-  assert.equal(body.resolution, "720p");
+  assert.equal(body.resolution, "1080p");
   assert.equal(body.aspect_ratio, "9:16");
   assert.deepEqual(body.input_references, [
     { type: "image_url", image_url: { url: image } },
@@ -148,33 +146,34 @@ test("null public Avatar duration metadata is not turned into an invented 30-sec
       buildVideoRequest(env, { ...presenter, duration }).duration,
       duration,
     );
-  assert.equal(buildVideoRequest({...env,AHAB_AVATAR_MAX_SECONDS_VERIFIED:"0"}, {...presenter,duration:120}).duration,120);
+  assert.equal(
+    buildVideoRequest(
+      { ...env, AHAB_AVATAR_MAX_SECONDS_VERIFIED: "0" },
+      { ...presenter, duration: 120 },
+    ).duration,
+    120,
+  );
 });
 
-test("reference mode carries each modality in the exact OpenRouter input reference shape", () => {
+test("scene mode uses one first frame and generated audio without unsupported references", () => {
   const body = buildVideoRequest(env, reference);
-  assert.equal(body.model, MODELS.video_reference);
-  assert.equal(body.resolution, "768p");
-  assert.deepEqual(body.input_references, [
-    { type: "image_url", image_url: { url: image } },
-    { type: "image_url", image_url: { url: image } },
-    { type: "video_url", video_url: { url: video } },
-    { type: "audio_url", audio_url: { url: audio } },
+  assert.equal(body.model, MODELS.scene);
+  assert.equal(body.resolution, "1080p");
+  assert.equal(body.generate_audio, true);
+  assert.deepEqual(body.frame_images, [
+    { type: "image_url", frame_type: "first_frame", image_url: { url: image } },
   ]);
-  assert.equal("generate_audio" in body, false);
-  assert.equal("provider" in body, false);
+  assert.equal("input_references" in body, false);
 });
-
-test("bounds reject unsupported inputs before spending", () => {
+test("scene and presenter input bounds reject unsupported references before spending", () => {
   for (const input of [
-    { ...reference, duration: 16 },
-    { ...reference, duration: 4 },
-    { ...reference, images: [image, image, image] },
-    { ...reference, video: { url: video, duration: 5.01 } },
-    { ...reference, audio: { url: audio, duration: 15.01 } },
-    { ...reference, video: undefined },
+    { ...reference, duration: 31 },
+    { ...reference, duration: 1 },
+    { ...reference, images: [image, image] },
+    { ...reference, video: { url: video, duration: 5 } },
+    { ...reference, audio: { url: audio, duration: 15 } },
     { ...reference, captions: true },
-    { ...presenter, duration: 121 },
+    { ...presenter, duration: 122 },
     { ...presenter, images: [] },
     { ...presenter, voiceId: "unconfigured" },
     { ...presenter, images: ["https://other.example/photo.jpg"] },
@@ -186,11 +185,15 @@ test("bounds reject unsupported inputs before spending", () => {
     },
   ])
     assert.throws(() => buildVideoRequest(env, input), OpenRouterError);
+  assert.equal(
+    buildVideoRequest(env, { ...presenter, duration: 121 }).duration,
+    121,
+  );
 });
 
 test("voice labels come only from the server allowlist", () => {
   assert.equal(getAvatarVoices({})[0].id, "1bd001e7e50f421d891986aad5c8bbd2");
-  assert.equal(getAvatarVoices({AHAB_AVATAR_VOICES:"[]"}).length,1);
+  assert.equal(getAvatarVoices({ AHAB_AVATAR_VOICES: "[]" }).length, 1);
   assert.deepEqual(
     getAvatarVoices({ AHAB_AVATAR_VOICES: '[{"id":"a","label":"A"}]' }),
     [{ id: "a", label: "A" }],
@@ -283,12 +286,12 @@ test("polling and downloads use fixed OpenRouter routes and sanitize provider er
   );
 });
 
-test("portrait uses the dedicated image API with n=1, 768 and optional reference images", async () => {
+test("portrait uses the dedicated image API with n=1, 1K and optional reference images", async () => {
   mockCatalogAndCall((url, init) => {
     assert.equal(url, "https://openrouter.ai/api/v1/images");
     const body = JSON.parse(String(init.body));
     assert.equal(body.model, MODELS.portrait);
-    assert.equal(body.resolution, "768");
+    assert.equal(body.resolution, "1K");
     assert.equal(body.n, 1);
     assert.deepEqual(body.input_references, [
       { type: "image_url", image_url: { url: image } },

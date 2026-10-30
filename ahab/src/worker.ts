@@ -14,6 +14,8 @@ import {
   OpenRouterError,
 } from "./lib/openrouter";
 import { assetStatement, expireMedia } from "./lib/media";
+import { reconcilePurchases } from "./lib/payments";
+import { validateOutput } from "./lib/output-validation";
 const terminal = (j: JobRow) => ["completed", "failed"].includes(j.status);
 const cents = (value: number | null) =>
   value === null ? null : Math.ceil(value * 100);
@@ -69,8 +71,12 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
         }
         try {
           if (j.kind === "portrait") {
+            const input = JSON.parse(j.request_json);
+            const refs = await jobRequest(this.env, j);
             const result = await generatePortrait(this.env, {
-              prompt: JSON.parse(j.request_json).prompt,
+              prompt: input.prompt,
+              imageUrls: refs.images,
+              edit: !!input.edit && input.imageIds.length > 1,
             });
             const ext =
               result.mediaType === "image/jpeg"
@@ -133,7 +139,6 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
         } catch (e) {
           if (e instanceof OpenRouterError && !e.submissionUncertain) {
             await failed(this.env, id, e.message);
-
           } else await uncertain(this.env, id);
           return null;
         }
@@ -194,6 +199,27 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
             });
             const object = await this.env.MEDIA.head(key);
             if (!object) throw new Error("Storage verification failed.");
+            let metadata;
+            try {
+              metadata = await validateOutput(
+                this.env.MEDIA,
+                key,
+                object.size,
+                j.duration,
+                j.resolution || "720p",
+                j.mode === "presenter",
+                j.mode === "presenter",
+              );
+            } catch {
+              await this.env.MEDIA.delete(key);
+              await failed(
+                this.env,
+                id,
+                "The completed file did not meet its video requirements. One video allowance has been restored.",
+                j.actual_cents,
+              );
+              return;
+            }
             await this.env.DB.batch([
               assetStatement(this.env, {
                 id,
@@ -203,9 +229,9 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
                 name: `Ahab-${id.slice(0, 8)}.mp4`,
                 mime: "video/mp4",
                 bytes: object.size,
-                duration: j.duration,
-                width: null,
-                height: null,
+                duration: metadata.duration,
+                width: metadata.width,
+                height: metadata.height,
               }),
               this.env.DB.prepare(
                 "UPDATE jobs SET status='completed',asset_id=?,error=NULL,updated_at=? WHERE id=? AND status NOT IN ('completed','failed')",
@@ -222,6 +248,7 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
 }
 async function scheduled(env: AhabEnv) {
   await expireMedia(env);
+  await reconcilePurchases(env);
   await env.DB.prepare(
     "UPDATE jobs SET status='uncertain',error=?,updated_at=? WHERE status='submitting' AND provider_id IS NULL AND updated_at<?",
   )

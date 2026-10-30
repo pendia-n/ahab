@@ -2527,3 +2527,136 @@ details p {
     transition: none !important;
   }
 }
+
+/* A compact production brief: each choice carries its own purpose. */
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+.task-choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  cursor: pointer;
+}
+.task-choice:has(input:checked) {
+  border-color: var(--blue);
+  background: var(--sky);
+  box-shadow: inset 0 0 0 1px var(--blue);
+}
+.task-choice input {
+  margin-top: 5px;
+  accent-color: var(--blue);
+}
+.task-choice strong,
+.task-choice small {
+  display: block;
+}
+.task-choice small {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 5px;
+  line-height: 1.45;
+}
+.offer-builder {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.purchase-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.offer-cart {
+  margin-top: 24px;
+}
+.cart-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cart-line strong,
+.cart-line small {
+  display: block;
+}
+.cart-line small {
+  color: var(--muted);
+}
+.quote-total {
+  font-family: Sora, sans-serif;
+  font-size: 30px;
+  text-align: right;
+  margin: 20px 0;
+}
+.shot-plan {
+  padding: 18px;
+  background: var(--sky);
+  border-radius: 14px;
+  margin: 18px 0;
+}
+.portrait-form summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.studio-editor .field > select,
+.studio-editor .field > input,
+.studio-editor .field > textarea {
+  width: 100%;
+}
+.studio-editor .panel {
+  margin-bottom: 20px;
+}
+.offer-builder input[type="number"] {
+  width: 100%;
+}
+.cart-line button {
+  flex-shrink: 0;
+}
+input[type="number"] {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: white;
+  color: var(--ink);
+}
+.task-choice:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .task-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .task-choice {
+    padding: 13px;
+  }
+  .cart-line {
+    align-items: flex-start;
+  }
+  .offer-builder {
+    padding: 22px;
+  }
+  .quote-total {
+    font-size: 25px;
+  }
+}
+@media (max-width: 420px) {
+  .task-grid {
+    grid-template-columns: 1fr;
+  }
+  .purchase-actions > * {
+    width: 100%;
+  }
+}

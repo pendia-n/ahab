@@ -14,6 +14,8 @@ import {
 } from "../../lib/media";
 import { purchases, checkout, webhook, readiness } from "../../lib/payments";
 import { createGeneration, jobById, publicJob } from "../../lib/generation";
+import { createQuote, makeQuote, expressEnabled } from "../../lib/quotes";
+import { prepare } from "../../lib/preparation";
 export const prerender = false;
 export const ALL: APIRoute = async ({ request, params }) => {
   const e = env as unknown as AhabEnv,
@@ -31,8 +33,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return await providerMedia(request, e, provider[1], provider[2]);
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) assertMutation(request);
     if (path === "config" && method === "GET") return json(await readiness(e));
+    if (path === "quote-preview" && method === "POST") {
+      await requestRate(e, request, "quote-preview", 40);
+      const b = await readJson(request);
+      try {
+        return json(makeQuote(b.items, expressEnabled(e)));
+      } catch (error) {
+        throw new HttpError(400, (error as Error).message);
+      }
+    }
     if (path.startsWith("auth/")) return await authRoute(path, request, e);
     const user = await requireUser(request, e);
+    if (path === "quotes" && method === "POST") {
+      await requestRate(e, request, "quote", 40);
+      return await createQuote(request, e, user.id);
+    }
+    if (path === "prepare" && method === "POST") {
+      await requestRate(e, request, "prepare", 10);
+      return await prepare(request, e, user.id);
+    }
     if (path === "library" && method === "GET")
       return await library(e, user.id);
     if (path === "purchases" && method === "GET")

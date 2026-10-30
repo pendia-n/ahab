@@ -207,11 +207,11 @@ test("reads a real PNG and rejects damaged CRC data", async () => {
   bytes[20] = 1;
   await assert.rejects(validateMedia(file(bytes), "image"), /damaged/);
 });
-test("WAV duration is computed from audio data and accepts the 120 second boundary", async () => {
-  assert.equal((await validateMedia(file(wav(120)), "audio")).duration, 120);
+test("WAV duration is computed from audio data and accepts the 121 second boundary", async () => {
+  assert.equal((await validateMedia(file(wav(121)), "audio")).duration, 121);
   await assert.rejects(
-    validateMedia(file(wav(120.001)), "audio"),
-    /120 seconds/,
+    validateMedia(file(wav(121.001)), "audio"),
+    /121 seconds/,
   );
 });
 test("WAV rejects forged byte rates and truncated chunks", async () => {
@@ -243,7 +243,7 @@ test("MP3 does not accept a spoofed Xing frame count or truncated final frame", 
   );
 });
 test("MP3 actual frames enforce the duration cap", async () => {
-  await assert.rejects(validateMedia(file(mp3(4594)), "audio"), /120 seconds/);
+  await assert.rejects(validateMedia(file(mp3(4633)), "audio"), /121 seconds/);
 });
 test("MP4 uses video sample timing and accepts a complete five second file", async () => {
   assert.deepEqual(await validateMedia(file(mp4(5)), "video"), {
