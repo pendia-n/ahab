@@ -232,3 +232,69 @@ test("MP4 inspection reads actual time, dimensions and audio instead of inventin
   });
   assert.throws(() => inspectMp4Metadata(new Uint8Array(100)));
 });
+
+test("included image preparation accepts 14 references, uses no video credit, and cannot overdraw", async () => {
+  const f = await setup();
+  try {
+    const refs = ["face"];
+    for (let i = 1; i < 15; i++) {
+      const id = "reference-" + i;
+      await f.media.put(id, "fixture-image");
+      await saveAsset(f.env, {
+        id,
+        user_id: "user-a",
+        kind: "image",
+        r2_key: id,
+        name: id + ".jpg",
+        mime: "image/jpeg",
+        bytes: 13,
+        duration: null,
+        width: 540,
+        height: 960,
+      });
+      refs.push(id);
+    }
+    await assert.rejects(
+      createGeneration(
+        request({ ...input, imageIds: refs }),
+        f.env,
+        "user-a",
+        "portrait",
+      ),
+    );
+    assert.equal(f.db.rows("SELECT * FROM jobs").length, 0);
+    const a = await createGeneration(
+      request({ ...input, imageIds: refs.slice(0, 14) }),
+      f.env,
+      "user-a",
+      "portrait",
+    );
+    assert.equal(a.status, 202);
+    const row = f.db.row<any>("SELECT * FROM allowances WHERE id='p'")!;
+    assert.equal(row.videos_remaining, 2);
+    assert.equal(row.portraits_remaining, 1);
+    const job = f.db.row<any>("SELECT * FROM jobs")!;
+    assert.equal(JSON.parse(job.request_json).imageIds.length, 14);
+    await createGeneration(
+      request({ ...input, imageIds: [], requestKey: "included-image-second" }),
+      f.env,
+      "user-a",
+      "portrait",
+    );
+    await assert.rejects(
+      createGeneration(
+        request({ ...input, imageIds: [], requestKey: "included-image-third" }),
+        f.env,
+        "user-a",
+        "portrait",
+      ),
+    );
+    assert.equal(
+      f.db.row<any>("SELECT videos_remaining FROM allowances WHERE id='p'")!
+        .videos_remaining,
+      2,
+    );
+  } finally {
+    f.close();
+  }
+});

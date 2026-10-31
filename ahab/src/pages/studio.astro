@@ -61,8 +61,8 @@ import { TASKS } from "../lib/offers";
             </select>
           </div>
         </div>
-        <div class="field">
-          <label for="studio-service">Delivery</label>
+        <div class="field" id="studio-service-field" hidden>
+          <label for="studio-service">Generation mode</label>
           <select id="studio-service">
             <option value="standard">Standard</option>
           </select>
@@ -108,8 +108,9 @@ import { TASKS } from "../lib/offers";
         <details class="portrait-form">
           <summary>Create, modify or combine an image</summary>
           <p class="field-help">
-            A suitable uploaded image can be used directly. A successful
-            preparation uses one image allowance. Review the result before
+            Every video includes one optional image creation or edit. Select up
+            to 14 references to combine into one image, or describe a new image.
+            A suitable upload can also be used directly. Review the result before
             animating it.
           </p>
           <label for="portrait-prompt">
@@ -121,10 +122,7 @@ import { TASKS } from "../lib/offers";
             maxlength="6000"
             placeholder="A fictional presenter in a simple kitchen. Or: keep my face and add the selected product to the scene."
           ></textarea>
-          <div class="field">
-            <label for="image-allowance">Image preparation allowance</label>
-            <select id="image-allowance"></select>
-          </div>
+          <p id="included-image-status" class="field-help" aria-live="polite"></p>
           <button
             class="button secondary small"
             type="button"

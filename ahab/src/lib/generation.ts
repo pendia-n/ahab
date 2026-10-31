@@ -162,13 +162,13 @@ export async function createGeneration(
   }
   if (
     !Array.isArray(b.imageIds) ||
-    b.imageIds.length > (kind === "portrait" ? 2 : 1) ||
+    b.imageIds.length > (kind === "portrait" ? 14 : 1) ||
     b.imageIds.some((v: unknown) => typeof v !== "string") ||
     new Set(b.imageIds).size !== b.imageIds.length
   )
     throw new HttpError(
       400,
-      "Choose one master reference image, or up to two images for preparation.",
+      "Choose one image for video, or up to 14 references for the included image preparation.",
     );
   for (const id of b.imageIds) {
     assets.push(await ownedAsset(env, id, userId, "image"));

@@ -76,7 +76,7 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
             const result = await generatePortrait(this.env, {
               prompt: input.prompt,
               imageUrls: refs.images,
-              edit: !!input.edit && input.imageIds.length > 1,
+              edit: input.imageIds.length > 1,
             });
             const ext =
               result.mediaType === "image/jpeg"

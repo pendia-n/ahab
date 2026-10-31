@@ -104,21 +104,10 @@ export function generatedDuration(
       : selected;
 }
 export function validateOffer(value: any, expressEnabled = false): OfferInput {
-  if (value?.service === "image") {
-    if (
-      !Number.isInteger(value.quantity) ||
-      value.quantity < 1 ||
-      value.quantity > 50
-    )
-      throw new Error("Choose 1–50 image allowances.");
-    return {
-      taskType: "presenter",
-      service: "image",
-      duration: 0,
-      resolution: "1080p",
-      quantity: value.quantity,
-    };
-  }
+  if (value?.service === "image")
+    throw new Error(
+      "Image creation or editing is included with each video. Choose a video type.",
+    );
   const task = taskById(value?.taskType);
   if (!task || !["presenter", "scene", "express"].includes(value.service))
     throw new Error("Choose a video type.");
@@ -130,7 +119,7 @@ export function validateOffer(value: any, expressEnabled = false): OfferInput {
   )
     throw new Error("Choose an available service for this video type.");
   if (value.service === "express" && !expressEnabled)
-    throw new Error("Express is not available yet. Choose standard delivery.");
+    throw new Error("Fast generation is not available for this format.");
   const max =
     task.id === "explainer" && value.service !== "presenter" ? 30 : task.max;
   if (

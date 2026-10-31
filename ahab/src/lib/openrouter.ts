@@ -523,7 +523,7 @@ export async function generatePortrait(
 }> {
   const text = prompt(input.prompt);
   const imageUrls = input.imageUrls ?? [];
-  if (!Array.isArray(imageUrls) || imageUrls.length > 2)
+  if (!Array.isArray(imageUrls) || imageUrls.length > (input.edit ? 14 : 10))
     throw new OpenRouterError("invalid_request", 400);
   const references = imageUrls.map((url) => ({
     type: "image_url",

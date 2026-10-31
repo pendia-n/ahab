@@ -57,14 +57,11 @@ import { TASKS } from "../lib/offers";
       </div>
     </div>
     <div class="field-row">
-      <div class="field">
-        <label for="offer-service">Delivery</label>
+      <div class="field" id="offer-service-field" hidden>
+        <label for="offer-service">Generation mode</label>
         <select id="offer-service">
           <option value="standard">Standard</option>
         </select>
-        <p class="field-help">
-          Express appears only when available for your format.
-        </p>
       </div>
       <div class="field">
         <label for="offer-quantity">Number of separate allowances</label>
@@ -83,15 +80,12 @@ import { TASKS } from "../lib/offers";
       <button class="button secondary" type="submit">
         Add to purchase
       </button>
-      <button type="button" class="button ghost" id="add-image-credit">
-        Add an image allowance
-      </button>
     </div>
   </form>
   <div id="offer-cart" class="offer-cart" aria-live="polite"></div>
   <p class="field-help">
     Each video allowance includes one optional image preparation and three
-    writing preparations. Extra image allowances are available above.
+    writing preparations. Image creation or editing is included for every video type.
     Multiple-purchase rates apply when buying at least two eligible video
     allowances of up to 30 seconds.
   </p>

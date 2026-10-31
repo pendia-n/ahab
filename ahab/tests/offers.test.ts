@@ -199,3 +199,10 @@ test("old packages cannot be purchased through the new checkout", async () => {
     f.close();
   }
 });
+
+test("standalone image purchases are rejected because images are included with video", () => {
+  assert.throws(
+    () => makeQuote([{ service: "image", quantity: 1 }]),
+    /included with each video/,
+  );
+});

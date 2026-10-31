@@ -598,7 +598,10 @@ async function initializeOffers() {
     pay = $<HTMLButtonElement>("#pay-purchase")!;
   try {
     const saved = sessionStorage.getItem("ahab-cart-v1");
-    if (saved) cart = JSON.parse(saved).slice(0, 12);
+    if (saved)
+      cart = JSON.parse(saved)
+        .filter((i: OfferInput) => i.service !== "image")
+        .slice(0, 12);
   } catch {}
   const invalidate = () => {
     quote = undefined;
@@ -613,7 +616,7 @@ async function initializeOffers() {
       cart
         .map(
           (i, index) =>
-            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Express" : "Standard"} · use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
+            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Fast · " : ""}use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
         )
         .join("") +
       (quote
@@ -635,9 +638,8 @@ async function initializeOffers() {
     const old = delivery.value;
     delivery.innerHTML =
       option("standard", "Standard") +
-      (config.expressEnabled && s === "scene"
-        ? option("express", "Express")
-        : "");
+      (config.expressEnabled && s === "scene" ? option("express", "Fast") : "");
+    $("#offer-service-field")!.hidden = delivery.options.length < 2;
     if (old === "express" && config.expressEnabled && s === "scene")
       delivery.value = old;
     $("#offer-duration-note")!.textContent =
@@ -660,18 +662,6 @@ async function initializeOffers() {
       duration: Number(duration.value),
       resolution: resolution.value as Resolution,
       quantity: Number(quantity.value),
-    });
-    render();
-  });
-  $("#add-image-credit")!.addEventListener("click", () => {
-    if (cart.length >= 12) return;
-    invalidate();
-    cart.push({
-      taskType: "presenter",
-      service: "image",
-      duration: 0,
-      resolution: "1080p",
-      quantity: 1,
     });
     render();
   });
@@ -782,7 +772,6 @@ async function initializeStudio() {
     resolution = $<HTMLSelectElement>("#resolution")!,
     delivery = $<HTMLSelectElement>("#studio-service")!,
     allowance = $<HTMLSelectElement>("#allowance")!,
-    imageAllowance = $<HTMLSelectElement>("#image-allowance")!,
     script = $<HTMLTextAreaElement>("#script")!,
     direction = $<HTMLTextAreaElement>("#prompt")!,
     approved = $<HTMLInputElement>("#approved")!,
@@ -814,8 +803,9 @@ async function initializeStudio() {
     delivery.innerHTML =
       option("standard", "Standard") +
       (config.expressEnabled && base === "scene"
-        ? option("express", "Express")
+        ? option("express", "Fast")
         : "");
+    $("#studio-service-field")!.hidden = delivery.options.length < 2;
     if (chosen === "express" && config.expressEnabled && base === "scene")
       delivery.value = chosen;
     const s = service();
@@ -847,22 +837,14 @@ async function initializeStudio() {
     if ([...allowance.options].some((o) => o.value === previous))
       allowance.value = previous;
     else if (allowance.options.length === 2) allowance.selectedIndex = 1;
-    const imagePrevious = imageAllowance.value;
-    imageAllowance.innerHTML =
-      option("", "Choose an image allowance") +
-      allowances
-        .filter((a) => a.portraitsRemaining > 0)
-        .map((a) =>
-          option(
-            a.id,
-            `${a.name} · ${a.portraitsRemaining} image preparation${a.portraitsRemaining === 1 ? "" : "s"}`,
-          ),
-        )
-        .join("");
-    if ([...imageAllowance.options].some((o) => o.value === imagePrevious))
-      imageAllowance.value = imagePrevious;
-    else if (imageAllowance.options.length > 1)
-      imageAllowance.selectedIndex = 1;
+    const includedImages = selectedAllowance()?.portraitsRemaining ?? 0;
+    $("#included-image-status")!.textContent = !selectedAllowance()
+      ? "Choose your video allowance above to use its included image preparation."
+      : includedImages > 0
+        ? `${includedImages} included image preparation${includedImages === 1 ? "" : "s"} remaining with your selected allowance.`
+        : "The included image preparation has been used. You can use a saved image or upload an image directly.";
+    $<HTMLButtonElement>("#create-portrait")!.disabled =
+      running || !config.generationEnabled || includedImages < 1;
     $("#script-count")!.textContent =
       `${script.value.trim().split(/\s+/).filter(Boolean).length} words · about ${Math.ceil(script.value.trim().split(/\s+/).filter(Boolean).length / 2.5)} seconds of speech (estimate)`;
     generate.disabled =
@@ -1002,7 +984,8 @@ async function initializeStudio() {
     if (!b) return;
     const id = b.dataset.imageId!;
     if (images.includes(id)) images = images.filter((v) => v !== id);
-    else images = images.length < 2 ? [...images, id] : [id];
+    else if (images.length < 14) images = [...images, id];
+    else toast("Select up to 14 images for the included preparation.");
     approved.checked = false;
     render();
   });
@@ -1078,7 +1061,7 @@ async function initializeStudio() {
     button.disabled = true;
     try {
       const r = await post("/api/portraits", {
-        allowanceId: imageAllowance.value,
+        allowanceId: allowance.value,
         requestKey: imageKey,
         prompt: $<HTMLTextAreaElement>("#portrait-prompt")!.value,
         imageIds: images,
@@ -1092,7 +1075,7 @@ async function initializeStudio() {
     } catch (e) {
       $("#portrait-status")!.textContent = showError(e);
     } finally {
-      button.disabled = false;
+      render();
     }
   });
   form.addEventListener("submit", async (e) => {

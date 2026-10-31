@@ -128,6 +128,11 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
   if (!q)
     throw new HttpError(400, "Review your purchase to get a current price.");
   const quote = JSON.parse(q.snapshot_json) as Quote;
+  if (quote.items.some((i) => i.service === "image"))
+    throw new HttpError(
+      400,
+      "Image preparation is included with each video. Review a video purchase instead.",
+    );
   if (quote.items.some((i) => i.service === "express") && !expressEnabled(env))
     throw new HttpError(400, "Express is currently unavailable.");
   const existing = await env.DB.prepare(

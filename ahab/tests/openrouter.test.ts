@@ -85,6 +85,15 @@ function mockCatalogAndCall(
                 input_references: { type: "range", min: 0, max: 10 },
               },
             },
+            {
+              id: MODELS.image_edit,
+              supported_parameters: {
+                resolution: { type: "enum", values: ["1K"] },
+                aspect_ratio: { type: "enum", values: ["9:16"] },
+                n: { type: "range", min: 1, max: 1 },
+                input_references: { type: "range", min: 0, max: 14 },
+              },
+            },
           ],
         });
       return handler(url, init);
@@ -319,4 +328,39 @@ test("HTTP provider errors never expose their body and ambiguous 5xx is held for
       error.submissionUncertain &&
       !error.message.includes("Secrets"),
   );
+});
+
+test("image adapters forward the catalog reference maximum and request one output", async () => {
+  let calls = 0;
+  mockCatalogAndCall((url, init) => {
+    assert.equal(url, "https://openrouter.ai/api/v1/images");
+    const body = JSON.parse(String(init.body));
+    const edit = body.model === MODELS.image_edit;
+    assert.equal(body.input_references.length, edit ? 14 : 10);
+    assert.equal(body.n, 1);
+    calls++;
+    return Response.json({
+      data: [{ b64_json: btoa("image"), media_type: "image/png" }],
+    });
+  });
+  for (const [edit, max] of [
+    [false, 10],
+    [true, 14],
+  ] as const) {
+    const refs = Array.from({ length: max }, (_, i) => image + "&ref=" + i);
+    await generatePortrait(env, {
+      prompt: "Combine the supplied references.",
+      imageUrls: refs,
+      edit,
+    });
+    await assert.rejects(
+      generatePortrait(env, {
+        prompt: "Combine.",
+        imageUrls: [...refs, image],
+        edit,
+      }),
+      OpenRouterError,
+    );
+  }
+  assert.equal(calls, 2);
 });
