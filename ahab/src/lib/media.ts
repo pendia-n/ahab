@@ -269,7 +269,7 @@ export async function library(env: AhabEnv, userId: string) {
       .bind(userId)
       .all(),
     env.DB.prepare(
-      "SELECT id,kind,mode,status,duration,created_at AS createdAt,asset_id AS assetId,error FROM jobs WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
+      "SELECT id,kind,mode,status,COALESCE(selected_duration,duration) AS duration,created_at AS createdAt,asset_id AS assetId,error FROM jobs WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
     )
       .bind(userId)
       .all(),

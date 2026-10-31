@@ -1,5 +1,4 @@
 import {
-  generatedDuration,
   serviceFor,
   compatible,
   taskById,
@@ -548,7 +547,7 @@ async function initializePurchases() {
     $("#allowance-cards")!.innerHTML = data.allowances
       .map(
         (a: Allowance) =>
-          `<article class="panel"><h3>${escape(a.name)}</h3><p>${a.videosRemaining} video allowance${a.videosRemaining === 1 ? "" : "s"} · ${a.portraitsRemaining} image preparation${a.portraitsRemaining === 1 ? "" : "s"}</p><small>${a.maxDuration ? `Up to ${a.maxDuration}s selected · ` : ""}${escape(a.resolution)} · no expiry</small><p><a class="text-link" href="/studio?allowance=${encodeURIComponent(a.id)}">Use when ready →</a></p></article>`,
+          `<article class="panel"><h3>${escape(a.name)}</h3><p>${a.videosRemaining} video allowance${a.videosRemaining === 1 ? "" : "s"} · ${a.portraitsRemaining} image preparation${a.portraitsRemaining === 1 ? "" : "s"}</p><small>${a.maxDuration ? `Up to ${a.maxDuration}s · ` : ""}${escape(a.resolution)} · no expiry</small><p><a class="text-link" href="/studio?allowance=${encodeURIComponent(a.id)}">Use when ready →</a></p></article>`,
       )
       .join("");
     target.innerHTML = data.purchases.length
@@ -614,7 +613,7 @@ async function initializeOffers() {
       cart
         .map(
           (i, index) =>
-            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s selected · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${generatedDuration(i.taskType, i.duration, i.service)}s generation target · ${i.service === "express" ? "Express" : "Standard"} · use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
+            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Express" : "Standard"} · use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
         )
         .join("") +
       (quote
@@ -642,7 +641,7 @@ async function initializeOffers() {
     if (old === "express" && config.expressEnabled && s === "scene")
       delivery.value = old;
     $("#offer-duration-note")!.textContent =
-      `${duration.value}s selected → ${generatedDuration(t.id, Number(duration.value), service())}s generation target. Extra time is included. Each allowance makes one video.`;
+      "Each allowance makes one video. Use your allowances separately, whenever you are ready.";
   };
   form.addEventListener("change", update);
   duration.addEventListener("input", () => {
@@ -819,12 +818,10 @@ async function initializeStudio() {
         : "");
     if (chosen === "express" && config.expressEnabled && base === "scene")
       delivery.value = chosen;
-    const s = service(),
-      actual = generatedDuration(t.id, Number(duration.value), s);
+    const s = service();
     $("#duration-note")!.textContent =
-      `${duration.value}s selected → ${actual}s generation target. Extra time is included. One allowance is used, even for a shorter video.`;
-    $("#preview-duration")!.textContent =
-      `${duration.value}s selected · ${actual}s target`;
+      "One allowance makes one video. A shorter video still uses one allowance.";
+    $("#preview-duration")!.textContent = `${duration.value}-second video`;
     $("#preview-resolution")!.textContent = resolution.value.toUpperCase();
     $("#presenter-options")!.hidden = s !== "presenter";
     $("#scene-input-note")!.hidden = s === "presenter";

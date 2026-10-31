@@ -5,7 +5,7 @@ import {
   compatible,
   validateOffer,
 } from "../src/lib/offers";
-import { makeQuote } from "../src/lib/quotes";
+import { makeQuote, publicQuote } from "../src/lib/quotes";
 import { fulfillEvent, checkout } from "../src/lib/payments";
 import { fixture, seedUser } from "./helpers";
 const item = (
@@ -67,6 +67,14 @@ test("rates use selected time, bonuses are included and deliberate 30s Express d
     makeQuote([item("presenter", 120)]).items[0].generatedDuration,
     121,
   );
+});
+test("customer quotes expose selected length while keeping internal duration adjustments private", () => {
+  const internal = makeQuote([item("demo", 25, "scene")]);
+  const visible = publicQuote(internal);
+  assert.equal(internal.items[0].generatedDuration, 29);
+  assert.equal(visible.items[0].duration, 25);
+  assert.equal("generatedDuration" in visible.items[0], false);
+  assert.equal(visible.amountCents, internal.amountCents);
 });
 test("multiple purchases discount eligible short videos, with no all-at-once use condition", () => {
   assert.equal(

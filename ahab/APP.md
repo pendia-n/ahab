@@ -20,7 +20,7 @@ Formats: talking presenter, demo/tutorial, unboxing, scripted reaction, showcase
 | Explainer, presenter | 5–100            | Below 12 becomes 12; 100 becomes 106                          |
 | Explainer, scenes    | 5–30             | Below 12 becomes 12                                           |
 
-These are Ahab bonuses, not provider duration restrictions. Quotes show selected and target time. Speech timing can vary; actual downloaded MP4 metadata is inspected and stored. Public Avatar metadata publishes no maximum. The adapter accepts Ahab's 121-second target, without claiming an end-to-end long-duration provider test. Both scene models list 2–30 seconds and 720p/1080p.
+These are Ahab bonuses, not provider duration restrictions. Customer-facing pages, carts, quotes, checkout and job summaries show only the selected length. Duration adjustments are internal passive bonuses and are never advertised. Speech timing can vary; actual downloaded MP4 metadata is inspected and stored. Public Avatar metadata publishes no maximum. The adapter accepts Ahab's 121-second target, without claiming an end-to-end long-duration provider test. Both scene models list 2–30 seconds and 720p/1080p.
 
 ## Pricing
 

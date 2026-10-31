@@ -31,7 +31,7 @@ export function publicJob(j: JobRow) {
     selectedDuration: j.selected_duration,
     resolution: j.resolution,
     service: j.service,
-    duration: j.duration,
+    duration: j.selected_duration ?? j.duration,
     status: j.status,
     assetId: j.asset_id,
     error: j.error,
@@ -200,7 +200,7 @@ export async function createGeneration(
       if (!a.duration || a.duration > duration)
         throw new HttpError(
           400,
-          `Choose narration no longer than ${duration} seconds.`,
+          "Choose narration that fits your selected video length.",
         );
       assets.push(a);
       input.audioId = a.id;

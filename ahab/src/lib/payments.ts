@@ -192,7 +192,7 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
               description:
                 i.service === "image"
                   ? "One image preparation. Use whenever you are ready."
-                  : `One separate generation. Selected ${i.duration}s; target ${i.generatedDuration}s. Includes one optional image preparation. No expiry.`,
+                  : `One ${i.duration}-second video generation. Includes one optional image preparation. No expiry.`,
             },
           },
         })),

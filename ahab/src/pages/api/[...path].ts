@@ -14,7 +14,12 @@ import {
 } from "../../lib/media";
 import { purchases, checkout, webhook, readiness } from "../../lib/payments";
 import { createGeneration, jobById, publicJob } from "../../lib/generation";
-import { createQuote, makeQuote, expressEnabled } from "../../lib/quotes";
+import {
+  createQuote,
+  makeQuote,
+  publicQuote,
+  expressEnabled,
+} from "../../lib/quotes";
 import { prepare } from "../../lib/preparation";
 export const prerender = false;
 export const ALL: APIRoute = async ({ request, params }) => {
@@ -37,7 +42,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       await requestRate(e, request, "quote-preview", 40);
       const b = await readJson(request);
       try {
-        return json(makeQuote(b.items, expressEnabled(e)));
+        return json(publicQuote(makeQuote(b.items, expressEnabled(e))));
       } catch (error) {
         throw new HttpError(400, (error as Error).message);
       }

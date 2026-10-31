@@ -86,6 +86,15 @@ export function makeQuote(
     expiresAt: now + 30 * 60000,
   };
 }
+/** Duration adjustments remain internal; customers choose and see their requested length. */
+export function publicQuote(quote: Quote) {
+  return {
+    ...quote,
+    items: quote.items.map(
+      ({ generatedDuration: _internalDuration, ...item }) => item,
+    ),
+  };
+}
 export async function createQuote(
   request: Request,
   env: AhabEnv,
@@ -111,5 +120,5 @@ export async function createQuote(
       Date.now(),
     )
     .run();
-  return json({ quoteId: id, ...quote }, 201);
+  return json({ quoteId: id, ...publicQuote(quote) }, 201);
 }
