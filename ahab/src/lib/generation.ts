@@ -7,6 +7,7 @@ import {
   OpenRouterError,
 } from "./openrouter";
 import { signJwt } from "./crypto";
+import { generationContext } from "./reference-selection";
 import { readiness } from "./payments";
 import {
   validateOffer,
@@ -119,6 +120,18 @@ export async function createGeneration(
   let selected = 0;
   let task: TaskType = "presenter";
   let resolution: Resolution = "1080p";
+  if (
+    kind === "portrait" &&
+    (b.modify !== true ||
+      b.referenceRole !== "character" ||
+      !Array.isArray(b.imageIds) ||
+      b.imageIds.length < 1 ||
+      (b.subjectImageIds?.length ?? 0) > 0)
+  )
+    throw new HttpError(
+      400,
+      "Image editing is only available for character portraits you explicitly choose to edit.",
+    );
   const assets: AssetRow[] = [];
   const input: any = { prompt, imageIds: [], edit: !!b.modify };
   if (kind === "video") {
@@ -154,6 +167,29 @@ export async function createGeneration(
         400,
         "Choose an allowance that covers this format, duration and resolution.",
       );
+    const prepared = await env.DB.prepare(
+      "SELECT result_json FROM preparations WHERE id=? AND user_id=? AND allowance_id=? AND status='completed'",
+    )
+      .bind(
+        typeof b.preparationId === "string" ? b.preparationId : "",
+        userId,
+        allowance.id,
+      )
+      .first<{ result_json: string }>();
+    const approvedBrief = prepared ? JSON.parse(prepared.result_json) : null;
+    if (
+      !approvedBrief ||
+      JSON.stringify(approvedBrief.context) !==
+        JSON.stringify(generationContext(b)) ||
+      approvedBrief.script !== (b.script ?? "") ||
+      approvedBrief.direction !== prompt ||
+      JSON.stringify(approvedBrief.shots) !== JSON.stringify(b.shots ?? [])
+    )
+      throw new HttpError(
+        400,
+        "Prepare your brief, then review and approve it before generating. Prepare it again if you change the settings or references.",
+      );
+    input.preparationId = b.preparationId;
     if (b.approved !== true)
       throw new HttpError(
         400,

@@ -1,5 +1,5 @@
 ---
-import { TASKS } from "../lib/offers";
+import { TASKS, EXPLAINER_THEMES } from "../lib/offers";
 ---
 
 <div class="offer-builder panel" id="offer-builder">
@@ -32,9 +32,14 @@ import { TASKS } from "../lib/offers";
       <div class="field" id="offer-style-field" hidden>
         <label for="offer-style">How will you tell it?</label>
         <select id="offer-style">
-          <option value="presenter">Mostly someone speaking</option>
-          <option value="scene">Mostly visual scenes</option>
+          {EXPLAINER_THEMES.map((t) => (
+            <option value={t.id}>{t.name}</option>
+          ))}
         </select>
+        <p id="offer-style-help" class="field-help" hidden>
+          Explanations longer than 30 seconds use an on-camera presenter. Choose
+          up to 30 seconds for visual scenes.
+        </p>
       </div>
       <div class="field">
         <label for="offer-duration">Video length · seconds</label>
@@ -58,7 +63,7 @@ import { TASKS } from "../lib/offers";
     </div>
     <div class="field-row">
       <div class="field" id="offer-service-field" hidden>
-        <label for="offer-service">Generation mode</label>
+        <label for="offer-service">Generation option</label>
         <select id="offer-service">
           <option value="standard">Standard</option>
         </select>
@@ -84,8 +89,8 @@ import { TASKS } from "../lib/offers";
   </form>
   <div id="offer-cart" class="offer-cart" aria-live="polite"></div>
   <p class="field-help">
-    Each video allowance includes one optional image preparation and three
-    writing preparations. Image creation or editing is included for every video type.
+    Each video allowance includes one optional portrait edit and three writing
+    preparations. Portrait editing is included for every video type.
     Multiple-purchase rates apply when buying at least two eligible video
     allowances of up to 30 seconds.
   </p>

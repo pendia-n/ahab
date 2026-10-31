@@ -8,8 +8,8 @@ import {
 } from "./offers";
 import type { AhabEnv } from "./types";
 import { HttpError, json, readJson } from "./http";
-export function expressEnabled(env: Pick<AhabEnv, "EXPRESS_VERIFIED">) {
-  return env.EXPRESS_VERIFIED === "true";
+export function expressEnabled(_env: Pick<AhabEnv, "EXPRESS_VERIFIED">) {
+  return true;
 }
 /** Complete planned first pass, including a portrait, text, funding and media headroom. */
 export function plannedCostCents(
@@ -75,7 +75,7 @@ export function makeQuote(
       name:
         v.service === "image"
           ? "Image preparation"
-          : `${v.service === "presenter" ? "Presenter" : v.service === "express" ? "Express scene" : "Scene"} · ${v.duration}s · ${v.resolution}`,
+          : `${v.service === "presenter" ? "Presenter" : v.service === "express" ? "Plus scene" : "Scene"} · ${v.duration}s · ${v.resolution}`,
     };
   });
   return {

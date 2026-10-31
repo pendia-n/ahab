@@ -4,6 +4,7 @@ import { fixture, seedUser } from "./helpers";
 import { createGeneration } from "../src/lib/generation";
 import { saveAsset } from "../src/lib/media";
 import { prepare } from "../src/lib/preparation";
+import { generationContext } from "../src/lib/reference-selection";
 import { inspectMp4Metadata } from "../src/lib/output-validation";
 afterEach(() => mock.restoreAll());
 async function setup() {
@@ -35,6 +36,21 @@ async function setup() {
     width: 540,
     height: 960,
   });
+  await f.db
+    .prepare(
+      "INSERT INTO preparations(id,user_id,allowance_id,request_key,raw_text,status,result_json,created_at) VALUES('approved-fixture','user-a','p','fixture-preparation-key','','completed',?,?)",
+    )
+    .bind(
+      JSON.stringify({
+        context: generationContext(input),
+        script: input.script,
+        direction: input.prompt,
+        shots: [],
+      }),
+      Date.now(),
+    )
+    .run();
+  await f.db.prepare("UPDATE allowances SET text_used=0 WHERE id='p'").run();
   return {
     ...f,
     env: {
@@ -59,6 +75,10 @@ const input = {
   prompt: "Demonstrate this product. No invented claims.",
   script: "",
   imageIds: ["face"],
+  characterImageIds: [],
+  subjectImageIds: ["face"],
+  preparationId: "approved-fixture",
+  shots: [],
   approved: true,
 };
 test("a retry with the same request key returns the durable job without spending twice", async () => {
@@ -256,7 +276,13 @@ test("included image preparation accepts 14 references, uses no video credit, an
     }
     await assert.rejects(
       createGeneration(
-        request({ ...input, imageIds: refs }),
+        request({
+          ...input,
+          imageIds: refs,
+          modify: true,
+          referenceRole: "character",
+          subjectImageIds: [],
+        }),
         f.env,
         "user-a",
         "portrait",
@@ -264,7 +290,13 @@ test("included image preparation accepts 14 references, uses no video credit, an
     );
     assert.equal(f.db.rows("SELECT * FROM jobs").length, 0);
     const a = await createGeneration(
-      request({ ...input, imageIds: refs.slice(0, 14) }),
+      request({
+        ...input,
+        imageIds: refs.slice(0, 14),
+        modify: true,
+        referenceRole: "character",
+        subjectImageIds: [],
+      }),
       f.env,
       "user-a",
       "portrait",
@@ -276,14 +308,28 @@ test("included image preparation accepts 14 references, uses no video credit, an
     const job = f.db.row<any>("SELECT * FROM jobs")!;
     assert.equal(JSON.parse(job.request_json).imageIds.length, 14);
     await createGeneration(
-      request({ ...input, imageIds: [], requestKey: "included-image-second" }),
+      request({
+        ...input,
+        imageIds: ["face"],
+        requestKey: "included-image-second",
+        modify: true,
+        referenceRole: "character",
+        subjectImageIds: [],
+      }),
       f.env,
       "user-a",
       "portrait",
     );
     await assert.rejects(
       createGeneration(
-        request({ ...input, imageIds: [], requestKey: "included-image-third" }),
+        request({
+          ...input,
+          imageIds: ["face"],
+          requestKey: "included-image-third",
+          modify: true,
+          referenceRole: "character",
+          subjectImageIds: [],
+        }),
         f.env,
         "user-a",
         "portrait",
@@ -293,6 +339,177 @@ test("included image preparation accepts 14 references, uses no video credit, an
       f.db.row<any>("SELECT videos_remaining FROM allowances WHERE id='p'")!
         .videos_remaining,
       2,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test("generation requires the owned completed GLM result and unchanged approved settings", async () => {
+  const f = await setup();
+  try {
+    for (const patch of [
+      { preparationId: undefined },
+      { preparationId: "unknown" },
+      { script: "Injected dialogue" },
+      { shots: ["Unapproved shot"] },
+      { wording: "draft" },
+      { style: "Different delivery" },
+      { imageIds: [] },
+    ]) {
+      await assert.rejects(
+        createGeneration(
+          request({ ...input, ...patch }),
+          f.env,
+          "user-a",
+          "video",
+        ),
+      );
+    }
+    assert.equal(f.db.rows("SELECT * FROM jobs").length, 0);
+    assert.equal(
+      f.db.row<any>("SELECT videos_remaining FROM allowances WHERE id='p'")!
+        .videos_remaining,
+      2,
+    );
+  } finally {
+    f.close();
+  }
+});
+test("portrait editing rejects text-only generation, product edits and missing explicit consent", async () => {
+  const f = await setup();
+  try {
+    for (const patch of [
+      {},
+      { modify: true, referenceRole: "subject" },
+      {
+        modify: true,
+        referenceRole: "character",
+        imageIds: [],
+        subjectImageIds: [],
+      },
+      { modify: true, referenceRole: "character" },
+    ])
+      await assert.rejects(
+        createGeneration(
+          request({ ...input, ...patch }),
+          f.env,
+          "user-a",
+          "portrait",
+        ),
+      );
+    assert.equal(f.db.rows("SELECT * FROM jobs").length, 0);
+    assert.equal(
+      f.db.row<any>("SELECT portraits_remaining FROM allowances WHERE id='p'")!
+        .portraits_remaining,
+      2,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test("a real preparation response binds the brief that generation accepts", async () => {
+  const f = await setup();
+  try {
+    mock.method(globalThis, "fetch", async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                script: "DO NOT CHANGE",
+                direction: "Show the approved product on a table.",
+                shots: ["Show product detail"],
+              }),
+            },
+          },
+        ],
+        usage: { cost: 0.001 },
+      }),
+    );
+    const body = {
+      ...input,
+      requestKey: "end-to-end-prepare",
+      wording: "exact",
+      script: "Approved original words.",
+    };
+    const response = await prepare(request(body), f.env, "user-a");
+    const result = ((await response.json()) as any).preparation;
+    assert.equal(result.script, body.script);
+    const job = await createGeneration(
+      request({
+        ...body,
+        requestKey: "end-to-end-video",
+        preparationId: result.id,
+        prompt: result.direction,
+        script: result.script,
+        shots: result.shots,
+      }),
+      f.env,
+      "user-a",
+      "video",
+    );
+    assert.equal(job.status, 202);
+    const stored = JSON.parse(
+      f.db.row<any>("SELECT request_json FROM jobs")!.request_json,
+    );
+    assert.deepEqual(stored.imageIds, ["face"]);
+    assert.equal(stored.preparationId, result.id);
+  } finally {
+    f.close();
+  }
+});
+
+test("existing video buyers receive one transition preparation, not an unlimited reset", async () => {
+  const f = await setup();
+  try {
+    await f.db
+      .prepare(
+        "UPDATE allowances SET text_used=6,policy_version=1 WHERE id='p'",
+      )
+      .run();
+    mock.method(globalThis, "fetch", async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                script: "",
+                direction: "Show the product.",
+                shots: [],
+              }),
+            },
+          },
+        ],
+        usage: { cost: 0.001 },
+      }),
+    );
+    await prepare(
+      request({
+        ...input,
+        wording: "exact",
+        requestKey: "transition-prepare-one",
+      }),
+      f.env,
+      "user-a",
+    );
+    assert.equal(
+      f.db.row<any>("SELECT policy_version FROM allowances WHERE id='p'")!
+        .policy_version,
+      2,
+    );
+    await assert.rejects(
+      prepare(
+        request({
+          ...input,
+          wording: "exact",
+          requestKey: "transition-prepare-two",
+        }),
+        f.env,
+        "user-a",
+      ),
+      /preparation remaining/,
     );
   } finally {
     f.close();

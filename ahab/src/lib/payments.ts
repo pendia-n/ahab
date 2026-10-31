@@ -134,7 +134,7 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
       "Image preparation is included with each video. Review a video purchase instead.",
     );
   if (quote.items.some((i) => i.service === "express") && !expressEnabled(env))
-    throw new HttpError(400, "Express is currently unavailable.");
+    throw new HttpError(400, "Plus generation is currently unavailable.");
   const existing = await env.DB.prepare(
     "SELECT id,stripe_session_id FROM purchases WHERE quote_id=?",
   )
@@ -197,7 +197,7 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
               description:
                 i.service === "image"
                   ? "One image preparation. Use whenever you are ready."
-                  : `One ${i.duration}-second video generation. Includes one optional image preparation. No expiry.`,
+                  : `One ${i.duration}-second video generation. Includes one optional character-portrait edit. No expiry.`,
             },
           },
         })),
@@ -307,7 +307,7 @@ export async function fulfillEvent(
           item.resolution,
           item.generatedDuration,
           item.taskType,
-          1,
+          2,
           child.snapshot_json,
         ),
       );

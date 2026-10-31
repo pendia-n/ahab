@@ -1,7 +1,9 @@
 import type { AhabEnv } from "./types";
 import { HttpError, json, readJson, textValue } from "./http";
 import { prepareText, OpenRouterError } from "./openrouter";
-import { taskById } from "./offers";
+import { taskById, validateOffer } from "./offers";
+import { generationContext } from "./reference-selection";
+import { ownedAsset } from "./media";
 import { savePrompt } from "./media";
 const FORMAT_DIRECTION: Record<string, string> = {
   presenter:
@@ -44,6 +46,20 @@ export async function prepare(request: Request, env: AhabEnv, userId: string) {
       return json({ preparation: JSON.parse(old.result_json) });
     throw new HttpError(409, "This preparation is already being checked.");
   }
+  try {
+    validateOffer({ ...b, quantity: 1 }, true);
+  } catch (e) {
+    throw new HttpError(400, (e as Error).message);
+  }
+  const context = generationContext(b);
+  for (const id of [...context.characterImageIds, ...context.subjectImageIds])
+    await ownedAsset(env, id, userId, "image");
+  // Existing buyers get one transition preparation because old results were not bound to settings.
+  await env.DB.prepare(
+    "UPDATE allowances SET text_used=MAX(0,text_used-1),policy_version=2 WHERE id=? AND user_id=? AND policy_version<2 AND videos_remaining>0",
+  )
+    .bind(b.allowanceId, userId)
+    .run();
   const id = crypto.randomUUID();
   try {
     await env.DB.prepare(
@@ -72,12 +88,13 @@ export async function prepare(request: Request, env: AhabEnv, userId: string) {
         typeof b.style === "string"
           ? b.style.slice(0, 200)
           : "Natural and conversational",
-      task: `${b.taskType}: ${FORMAT_DIRECTION[b.taskType]}`,
+      task: `${b.taskType}: ${FORMAT_DIRECTION[b.taskType]}. Mode: ${b.service === "presenter" ? "on-camera presenter" : "visual scenes"}. Theme: ${b.theme ?? "presenter"}. Only ${context.imageIds.length} selected image is forwarded to video. Other selected images are not video inputs. Character/product labels do not imply access to pixels; use only customer-supplied visual facts. Never request image editing or invent unseen image details.`,
       duration: b.duration,
       wording: b.wording,
     });
     const result = {
       id,
+      context,
       script: r.script,
       direction: r.direction,
       shots: r.shots,

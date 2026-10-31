@@ -60,6 +60,7 @@ export type OfferInput = {
   duration: number;
   resolution: Resolution;
   quantity: number;
+  theme?: string;
 };
 export type QuoteItem = OfferInput & {
   generatedDuration: number;
@@ -78,8 +79,22 @@ export type Quote = {
 export function taskById(id: unknown) {
   return TASKS.find((t) => t.id === id);
 }
-export function serviceFor(task: TaskType, visual = false): Service {
-  return task === "presenter" || (task === "explainer" && !visual)
+export const EXPLAINER_THEMES = [
+  { id: "presenter", name: "Person speaking to camera" },
+  { id: "demo", name: "Product demonstration" },
+  { id: "story", name: "Visual problem and solution" },
+  { id: "features", name: "Product features / comparison" },
+] as const;
+export function serviceFor(
+  task: TaskType,
+  theme: boolean | string = false,
+  duration = 0,
+): Service {
+  const visual =
+    theme === true ||
+    ["scene", "demo", "story", "features"].includes(String(theme));
+  return task === "presenter" ||
+    (task === "explainer" && (!visual || duration > 30))
     ? "presenter"
     : "scene";
 }
@@ -103,7 +118,7 @@ export function generatedDuration(
       ? 29
       : selected;
 }
-export function validateOffer(value: any, expressEnabled = false): OfferInput {
+export function validateOffer(value: any, _expressEnabled = true): OfferInput {
   if (value?.service === "image")
     throw new Error(
       "Image creation or editing is included with each video. Choose a video type.",
@@ -111,15 +126,20 @@ export function validateOffer(value: any, expressEnabled = false): OfferInput {
   const task = taskById(value?.taskType);
   if (!task || !["presenter", "scene", "express"].includes(value.service))
     throw new Error("Choose a video type.");
+  const theme =
+    task.id === "explainer"
+      ? (value.theme ?? (value.service === "presenter" ? "presenter" : "demo"))
+      : undefined;
+  if (theme && !EXPLAINER_THEMES.some((t) => t.id === theme))
+    throw new Error("Choose an explanation style.");
   const presenter =
-    serviceFor(task.id, value.service !== "presenter") === "presenter";
+    serviceFor(task.id, theme ?? true, value.duration) === "presenter";
   if (
     (presenter && value.service !== "presenter") ||
     (!presenter && value.service === "presenter")
   )
     throw new Error("Choose an available service for this video type.");
-  if (value.service === "express" && !expressEnabled)
-    throw new Error("Fast generation is not available for this format.");
+
   const max =
     task.id === "explainer" && value.service !== "presenter" ? 30 : task.max;
   if (
@@ -142,6 +162,7 @@ export function validateOffer(value: any, expressEnabled = false): OfferInput {
     duration: value.duration,
     resolution: value.resolution,
     quantity: value.quantity,
+    ...(theme ? { theme } : {}),
   };
 }
 export function compatible(

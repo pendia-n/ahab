@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import PageHeading from "../components/PageHeading.astro";
-import { TASKS } from "../lib/offers";
+import { TASKS, EXPLAINER_THEMES } from "../lib/offers";
 ---
 
 <Layout title="Your next take" app protect active="create">
@@ -35,9 +35,14 @@ import { TASKS } from "../lib/offers";
         <div class="field" id="studio-style-field" hidden>
           <label for="studio-style">How will you tell it?</label>
           <select id="studio-style">
-            <option value="presenter">Mostly someone speaking</option>
-            <option value="scene">Mostly visual scenes</option>
+            {EXPLAINER_THEMES.map((t) => (
+              <option value={t.id}>{t.name}</option>
+            ))}
           </select>
+          <p id="studio-style-help" class="field-help" hidden>
+            Explanations longer than 30 seconds use an on-camera presenter.
+            Choose up to 30 seconds for visual scenes.
+          </p>
         </div>
         <div class="field-row">
           <div class="field">
@@ -62,7 +67,7 @@ import { TASKS } from "../lib/offers";
           </div>
         </div>
         <div class="field" id="studio-service-field" hidden>
-          <label for="studio-service">Generation mode</label>
+          <label for="studio-service">Generation option</label>
           <select id="studio-service">
             <option value="standard">Standard</option>
           </select>
@@ -87,51 +92,81 @@ import { TASKS } from "../lib/offers";
           <span id="image-counter">0 selected</span>
         </div>
         <p class="field-help">
-          Choose one approved master image for video generation. Select up to
-          two images below only when combining a person and product into a new
-          reference.
+          Keep character portraits separate from product or subject images.
+          Uploading does not edit an image.
+        </p>
+        <h3>Character / portrait images</h3>
+        <p class="field-help">
+          Select a portrait to use directly, or select up to 14 character
+          references for an optional portrait edit.
         </p>
         <div class="upload-zone">
-          <div>
-            <strong>Upload a portrait or product image</strong>
-            <small>JPG, PNG or WebP · up to 10 MB</small>
-          </div>
+          <strong>Upload a character portrait</strong>
           <input
             type="file"
             data-upload="image"
+            data-reference-role="character"
             accept="image/jpeg,image/png,image/webp"
-            aria-label="Upload reference image"
+            aria-label="Upload character portrait"
           />
         </div>
         <div id="image-choices" class="asset-choices"></div>
-        <p id="upload-status" class="form-status" role="status"></p>
         <details class="portrait-form">
-          <summary>Create, modify or combine an image</summary>
+          <summary>Edit character portrait (optional)</summary>
           <p class="field-help">
-            Every video includes one optional image creation or edit. Select up
-            to 14 references to combine into one image, or describe a new image.
-            A suitable upload can also be used directly. Review the result before
-            animating it.
+            Uses the portrait edit included with your video allowance. Only
+            selected character images are edited. Use images you have permission
+            to use; editing does not establish permission.
           </p>
           <label for="portrait-prompt">
-            What should change, or who should we create?
+            What should change in the character portrait?
           </label>
           <textarea
             id="portrait-prompt"
             rows="3"
             maxlength="6000"
-            placeholder="A fictional presenter in a simple kitchen. Or: keep my face and add the selected product to the scene."
+            placeholder="Change the outfit to a blue shirt; preserve the pose and soft lighting."
           ></textarea>
-          <p id="included-image-status" class="field-help" aria-live="polite"></p>
+          <p
+            id="included-image-status"
+            class="field-help"
+            aria-live="polite"
+          ></p>
           <button
             class="button secondary small"
             type="button"
             id="create-portrait"
           >
-            Create / modify image
+            Edit selected portrait
           </button>
           <p id="portrait-status" class="form-status" role="status"></p>
         </details>
+        <h3>Product / subject images</h3>
+        <p class="field-help">
+          Product images are used directly and are never sent to the portrait
+          editor.
+        </p>
+        <div class="upload-zone">
+          <strong>Upload a product or subject image</strong>
+          <input
+            type="file"
+            data-upload="image"
+            data-reference-role="subject"
+            accept="image/jpeg,image/png,image/webp"
+            aria-label="Upload product or subject image"
+          />
+        </div>
+        <div id="subject-choices" class="asset-choices"></div>
+        <div class="field">
+          <label for="video-image">Image to animate</label>
+          <select id="video-image"></select>
+          <p class="field-help">
+            Only this image is forwarded to the video model. To show a person
+            and product together, upload a scene image already containing both.
+            Separate uploads are not automatically combined.
+          </p>
+        </div>
+        <p id="upload-status" class="form-status" role="status"></p>
       </section>
       <section class="panel">
         <div class="panel-header">
@@ -184,7 +219,7 @@ import { TASKS } from "../lib/offers";
           </div>
         </div>
         <button id="prepare-text" type="button" class="button secondary small">
-          Prepare script and shot plan
+          Prepare brief for review
         </button>
         <p id="prepare-status" class="form-status" role="status"></p>
         <div id="shot-plan" class="shot-plan" hidden></div>

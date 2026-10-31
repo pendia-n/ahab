@@ -37,11 +37,10 @@ test("bonus rules belong to the product and preserve all requested boundaries", 
   ] as const)
     assert.equal(generatedDuration(task, selected, service), actual);
 });
-test("routing rejects presenter scenes, unverified Express and overlong visual explainers", () => {
+test("routing rejects incompatible modes and allows Plus without an operator gate", () => {
   for (const v of [
     item("presenter", 30, "scene"),
     item("demo", 15, "presenter"),
-    item("demo", 15, "express"),
     item("explainer", 31, "scene"),
     item("showcase", 9, "scene"),
   ])
@@ -204,5 +203,32 @@ test("standalone image purchases are rejected because images are included with v
   assert.throws(
     () => makeQuote([{ service: "image", quantity: 1 }]),
     /included with each video/,
+  );
+});
+
+test("Plus is available for tasks 2–5 and only scene-based short explainers", () => {
+  for (const task of ["demo", "unboxing", "reaction", "showcase"]) {
+    assert.equal(
+      validateOffer({ ...item(task, 15, "express"), theme: "presenter" }, false)
+        .service,
+      "express",
+    );
+  }
+  for (const theme of ["demo", "story", "features"]) {
+    assert.equal(
+      validateOffer({ ...item("explainer", 30, "express"), theme }, false)
+        .service,
+      "express",
+    );
+    assert.throws(() =>
+      validateOffer({ ...item("explainer", 31, "express"), theme }),
+    );
+    assert.equal(
+      validateOffer({ ...item("explainer", 31, "presenter"), theme }).service,
+      "presenter",
+    );
+  }
+  assert.throws(() =>
+    validateOffer({ ...item("explainer", 15, "express"), theme: "presenter" }),
   );
 });

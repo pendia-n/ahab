@@ -592,7 +592,7 @@ async function initializeOffers() {
   const service = (): Service =>
     delivery.value === "express"
       ? "express"
-      : serviceFor(task(), style.value === "scene");
+      : serviceFor(task(), style.value, Number(duration.value));
   const note = $("#offer-status")!,
     review = $<HTMLButtonElement>("#review-purchase")!,
     pay = $<HTMLButtonElement>("#pay-purchase")!;
@@ -616,7 +616,7 @@ async function initializeOffers() {
       cart
         .map(
           (i, index) =>
-            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Fast · " : ""}use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
+            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Plus · " : ""}use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
         )
         .join("") +
       (quote
@@ -626,9 +626,13 @@ async function initializeOffers() {
   const update = () => {
     const t = taskById(task())!;
     $("#offer-style-field")!.hidden = t.id !== "explainer";
-    const s = serviceFor(t.id, style.value === "scene");
+    $("#offer-style-help")!.hidden =
+      t.id !== "explainer" ||
+      Number(duration.value) <= 30 ||
+      style.value === "presenter";
+    const s = serviceFor(t.id, style.value, Number(duration.value));
     duration.min = String(t.min);
-    duration.max = String(t.id === "explainer" && s === "scene" ? 30 : t.max);
+    duration.max = String(t.max);
     duration.value = String(
       Math.max(
         t.min,
@@ -638,7 +642,7 @@ async function initializeOffers() {
     const old = delivery.value;
     delivery.innerHTML =
       option("standard", "Standard") +
-      (config.expressEnabled && s === "scene" ? option("express", "Fast") : "");
+      (config.expressEnabled && s === "scene" ? option("express", "Plus") : "");
     $("#offer-service-field")!.hidden = delivery.options.length < 2;
     if (old === "express" && config.expressEnabled && s === "scene")
       delivery.value = old;
@@ -662,6 +666,7 @@ async function initializeOffers() {
       duration: Number(duration.value),
       resolution: resolution.value as Resolution,
       quantity: Number(quantity.value),
+      ...(task() === "explainer" ? { theme: style.value } : {}),
     });
     render();
   });
@@ -759,6 +764,9 @@ async function initializeStudio() {
       checkoutEnabled: false,
     };
   let images: string[] = [];
+  let subjects: string[] = [];
+  let preparationId = "";
+  let preparedFingerprint = "";
   let rawDirection = "";
   let shotPlan: string[] = [];
   let running = false;
@@ -777,22 +785,53 @@ async function initializeStudio() {
     approved = $<HTMLInputElement>("#approved")!,
     generate = $<HTMLButtonElement>("#generate-button")!,
     audio = $<HTMLSelectElement>("#audio-reference")!,
-    source = $<HTMLSelectElement>("#voice-source")!;
+    source = $<HTMLSelectElement>("#voice-source")!,
+    videoImage = $<HTMLSelectElement>("#video-image")!;
   const service = (): Service =>
     delivery.value === "express"
       ? "express"
-      : serviceFor(task.value as TaskType, style.value === "scene");
+      : serviceFor(task.value as TaskType, style.value, Number(duration.value));
   const selectedAllowance = () =>
     allowances.find((a) => a.id === allowance.value);
+  const generationFields = () => ({
+    taskType: task.value,
+    service: service(),
+    theme: style.value,
+    resolution: resolution.value,
+    duration: Number(duration.value),
+    characterImageIds: images,
+    subjectImageIds: subjects,
+    imageIds: videoImage.value ? [videoImage.value] : [],
+    ...(service() === "presenter"
+      ? source.value === "upload"
+        ? { audioId: audio.value }
+        : { voiceId: $<HTMLSelectElement>("#voice-id")!.value }
+      : {}),
+    wording: $<HTMLSelectElement>("#wording")!.value,
+    style: $<HTMLSelectElement>("#delivery-style")!.value,
+    caption:
+      service() === "presenter" && $<HTMLInputElement>("#caption")!.checked,
+  });
+  const fingerprint = () =>
+    JSON.stringify({
+      ...generationFields(),
+      allowanceId: allowance.value,
+      prompt: direction.value,
+      script: script.value,
+      shots: shotPlan,
+    });
+
   const render = () => {
     const t = taskById(task.value)!;
     $("#task-description")!.textContent = t.description;
     $("#studio-style-field")!.hidden = t.id !== "explainer";
-    const base = serviceFor(t.id, style.value === "scene");
+    $("#studio-style-help")!.hidden =
+      t.id !== "explainer" ||
+      Number(duration.value) <= 30 ||
+      style.value === "presenter";
+    const base = serviceFor(t.id, style.value, Number(duration.value));
     duration.min = String(t.min);
-    duration.max = String(
-      t.id === "explainer" && base === "scene" ? 30 : t.max,
-    );
+    duration.max = String(t.max);
     duration.value = String(
       Math.max(
         t.min,
@@ -803,7 +842,7 @@ async function initializeStudio() {
     delivery.innerHTML =
       option("standard", "Standard") +
       (config.expressEnabled && base === "scene"
-        ? option("express", "Fast")
+        ? option("express", "Plus")
         : "");
     $("#studio-service-field")!.hidden = delivery.options.length < 2;
     if (chosen === "express" && config.expressEnabled && base === "scene")
@@ -823,7 +862,7 @@ async function initializeStudio() {
       allowances
         .filter(
           (a) =>
-            a.videosRemaining > 0 &&
+            (a.videosRemaining > 0 || a.portraitsRemaining > 0) &&
             compatible(
               a,
               t.id,
@@ -832,44 +871,64 @@ async function initializeStudio() {
               resolution.value as Resolution,
             ),
         )
-        .map((a) => option(a.id, `${a.name} · ${a.videosRemaining} remaining`))
+        .map((a) =>
+          option(
+            a.id,
+            `${a.name} · ${a.videosRemaining} video${a.videosRemaining === 1 ? "" : "s"} · ${a.portraitsRemaining} portrait edit${a.portraitsRemaining === 1 ? "" : "s"}`,
+          ),
+        )
         .join("");
     if ([...allowance.options].some((o) => o.value === previous))
       allowance.value = previous;
     else if (allowance.options.length === 2) allowance.selectedIndex = 1;
     const includedImages = selectedAllowance()?.portraitsRemaining ?? 0;
     $("#included-image-status")!.textContent = !selectedAllowance()
-      ? "Choose your video allowance above to use its included image preparation."
+      ? "Choose your video allowance above to use its included portrait edit."
       : includedImages > 0
-        ? `${includedImages} included image preparation${includedImages === 1 ? "" : "s"} remaining with your selected allowance.`
-        : "The included image preparation has been used. You can use a saved image or upload an image directly.";
+        ? `${includedImages} included portrait edit${includedImages === 1 ? "" : "s"} remaining with your selected allowance.`
+        : "The included portrait edit has been used. You can use a saved image or upload an image directly.";
     $<HTMLButtonElement>("#create-portrait")!.disabled =
-      running || !config.generationEnabled || includedImages < 1;
-    $("#script-count")!.textContent =
-      `${script.value.trim().split(/\s+/).filter(Boolean).length} words · about ${Math.ceil(script.value.trim().split(/\s+/).filter(Boolean).length / 2.5)} seconds of speech (estimate)`;
-    generate.disabled =
       running ||
       !config.generationEnabled ||
-      !selectedAllowance() ||
-      !approved.checked ||
-      !direction.value.trim() ||
-      images.length > 1 ||
-      (s === "presenter" &&
-        (!images.length || (!script.value.trim() && source.value === "ai"))) ||
-      (["demo", "unboxing", "showcase"].includes(t.id) && !images.length);
-    const chosenImage = library.assets.find((a) => a.id === images[0]);
+      includedImages < 1 ||
+      images.length < 1;
+    $("#script-count")!.textContent =
+      `${script.value.trim().split(/\s+/).filter(Boolean).length} words · about ${Math.ceil(script.value.trim().split(/\s+/).filter(Boolean).length / 2.5)} seconds of speech (estimate)`;
+    const choices = library.assets.filter((a) => a.kind === "image");
+    const imageButtons = (ids: string[], role: string) =>
+      choices
+        .map(
+          (a) =>
+            `<button type="button" class="asset-choice ${ids.includes(a.id) ? "selected" : ""}" data-image-id="${escape(a.id)}" data-reference-role="${role}" aria-pressed="${ids.includes(a.id)}" aria-label="${role === "character" ? "Character" : "Product"}: ${escape(a.name)}"><img src="${assetUrl(a)}" alt="${escape(a.name)}" loading="lazy"/></button>`,
+        )
+        .join("");
+    $("#image-choices")!.innerHTML = imageButtons(images, "character");
+    $("#subject-choices")!.innerHTML = imageButtons(subjects, "subject");
+    const oldImage = videoImage.value;
+    const available = s === "presenter" ? images : [...subjects, ...images];
+    videoImage.innerHTML =
+      option(
+        "",
+        s === "presenter"
+          ? "Choose a portrait"
+          : "No image — generate from brief",
+      ) +
+      available
+        .map((id) =>
+          option(
+            id,
+            `${images.includes(id) ? "Character" : "Product"}: ${library.assets.find((a) => a.id === id)?.name ?? "Image"}`,
+          ),
+        )
+        .join("");
+    if (available.includes(oldImage)) videoImage.value = oldImage;
+    else if (available.length) videoImage.value = available[0];
+    const chosenImage = library.assets.find((a) => a.id === videoImage.value);
     const preview = $("#preview-stage")!;
     if (chosenImage)
-      preview.innerHTML = `<img src="${assetUrl(chosenImage)}" alt="Selected reference" style="width:100%;height:100%;object-fit:contain"/>`;
+      preview.innerHTML = `<img src="${assetUrl(chosenImage)}" alt="Image to animate" style="width:100%;height:100%;object-fit:contain"/>`;
     $("#image-counter")!.textContent =
-      `${images.length} selected${images.length > 1 ? " · combine before video" : ""}`;
-    $("#image-choices")!.innerHTML = library.assets
-      .filter((a) => a.kind === "image")
-      .map(
-        (a) =>
-          `<button type="button" class="asset-choice ${images.includes(a.id) ? "selected" : ""}" data-image-id="${escape(a.id)}" aria-pressed="${images.includes(a.id)}" aria-label="Use ${escape(a.name)}"><img src="${assetUrl(a)}" alt="${escape(a.name)}" loading="lazy"/></button>`,
-      )
-      .join("");
+      `${images.length} character · ${subjects.length} product`;
     const old = audio.value;
     audio.innerHTML =
       option("", "Choose saved narration") +
@@ -878,6 +937,28 @@ async function initializeStudio() {
         .map((a) => option(a.id, `${a.name} · ${Math.round(a.duration || 0)}s`))
         .join("");
     audio.value = old;
+    if (preparationId && preparedFingerprint !== fingerprint()) {
+      preparationId = "";
+      approved.checked = false;
+      $("#prepare-status")!.textContent =
+        "Your settings or brief changed. Prepare the brief again before generation.";
+    }
+    generate.disabled =
+      running ||
+      !config.generationEnabled ||
+      !selectedAllowance() ||
+      selectedAllowance()!.videosRemaining < 1 ||
+      !preparationId ||
+      !approved.checked ||
+      !direction.value.trim() ||
+      (s === "presenter" &&
+        (!videoImage.value ||
+          (source.value === "ai" && !script.value.trim()))) ||
+      (["demo", "unboxing", "showcase"].includes(t.id) && !videoImage.value);
+    $<HTMLButtonElement>("#prepare-text")!.disabled =
+      running ||
+      !selectedAllowance() ||
+      selectedAllowance()!.videosRemaining < 1;
     $("#studio-jobs")!.innerHTML = library.jobs.length
       ? jobsMarkup(library.jobs)
       : '<p class="muted">Your generation progress will appear here.</p>';
@@ -943,7 +1024,7 @@ async function initializeStudio() {
     const a = allowances.find((v) => v.id === requested);
     if (a && a.service !== "image" && !a.legacy) {
       task.value = (a as any).taskType || "presenter";
-      style.value = a.service === "presenter" ? "presenter" : "scene";
+      style.value = a.service === "presenter" ? "presenter" : "demo";
       duration.value = String(a.maxDuration);
       resolution.value = a.resolution;
       render();
@@ -979,16 +1060,30 @@ async function initializeStudio() {
     render();
   });
   form.addEventListener("change", () => render());
-  $("#image-choices")!.addEventListener("click", (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-image-id]");
-    if (!b) return;
-    const id = b.dataset.imageId!;
-    if (images.includes(id)) images = images.filter((v) => v !== id);
-    else if (images.length < 14) images = [...images, id];
-    else toast("Select up to 14 images for the included preparation.");
-    approved.checked = false;
-    render();
-  });
+  for (const selector of ["#image-choices", "#subject-choices"])
+    $(selector)!.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>(
+        "[data-image-id]",
+      );
+      if (!b) return;
+      const id = b.dataset.imageId!;
+      if (b.dataset.referenceRole === "character") {
+        if (images.includes(id)) images = images.filter((v) => v !== id);
+        else if (images.length < 14) {
+          images = [...images, id];
+          subjects = subjects.filter((v) => v !== id);
+        } else
+          toast("Select up to 14 character references for portrait editing.");
+      } else {
+        if (subjects.includes(id)) subjects = subjects.filter((v) => v !== id);
+        else {
+          subjects = [...subjects, id];
+          images = images.filter((v) => v !== id);
+        }
+      }
+      approved.checked = false;
+      render();
+    });
   $$<HTMLInputElement>("[data-upload]").forEach((input) =>
     input.addEventListener("change", async () => {
       const file = input.files?.[0];
@@ -1002,7 +1097,11 @@ async function initializeStudio() {
         body.set("kind", input.dataset.upload!);
         const r = await api("/api/media", { method: "POST", body });
         await refresh();
-        if (r.asset.kind === "image") images = [r.asset.id];
+        if (r.asset.kind === "image") {
+          if (input.dataset.referenceRole === "subject")
+            subjects = [...subjects, r.asset.id];
+          else images = [...images, r.asset.id].slice(-14);
+        }
         if (r.asset.kind === "audio") audio.value = r.asset.id;
         out.textContent = "Saved to your library.";
         render();
@@ -1029,6 +1128,7 @@ async function initializeStudio() {
     try {
       out.textContent = "Preparing your script and shot plan…";
       const r = await post("/api/prepare", {
+        ...generationFields(),
         allowanceId: allowance.value,
         requestKey: preparationKey,
         prompt: direction.value,
@@ -1048,6 +1148,8 @@ async function initializeStudio() {
       shots.innerHTML = `<strong>Suggested shot plan</strong><ol>${r.preparation.shots.map((s: string) => `<li>${escape(s)}</li>`).join("")}</ol>`;
       out.textContent = "Review or edit this before generating.";
       approved.checked = false;
+      preparationId = r.preparation.id;
+      preparedFingerprint = fingerprint();
       preparationKey = crypto.randomUUID();
       render();
     } catch (e) {
@@ -1065,7 +1167,8 @@ async function initializeStudio() {
         requestKey: imageKey,
         prompt: $<HTMLTextAreaElement>("#portrait-prompt")!.value,
         imageIds: images,
-        modify: images.length > 0,
+        modify: true,
+        referenceRole: "character",
       });
       imageKey = crypto.randomUUID();
       $("#portrait-status")!.textContent =
@@ -1087,24 +1190,16 @@ async function initializeStudio() {
       const r = await post("/api/generate", {
         allowanceId: allowance.value,
         requestKey: key,
-        taskType: task.value,
-        service: service(),
-        resolution: resolution.value,
-        duration: Number(duration.value),
+        ...generationFields(),
+        preparationId,
         prompt: direction.value,
         userPrompt: rawDirection || direction.value,
         script: script.value,
-        imageIds: images,
         shots: shotPlan,
         approved: approved.checked,
-        ...(service() === "presenter"
-          ? source.value === "upload"
-            ? { audioId: audio.value }
-            : { voiceId: $<HTMLSelectElement>("#voice-id")!.value }
-          : {}),
-        caption: $<HTMLInputElement>("#caption")!.checked,
       });
       key = crypto.randomUUID();
+      preparationId = "";
       approved.checked = false;
       $("#generation-error")!.textContent = "";
       void watch(r.job.id);
