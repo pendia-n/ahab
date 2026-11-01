@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, mock, afterEach } from "node:test";
 import {
   generatedDuration,
   compatible,
   validateOffer,
 } from "../src/lib/offers";
-import { makeQuote, publicQuote } from "../src/lib/quotes";
+import { makeQuote, publicQuote, roundPurchaseCents } from "../src/lib/quotes";
 import { fulfillEvent, checkout } from "../src/lib/payments";
 import { fixture, seedUser } from "./helpers";
+afterEach(() => mock.restoreAll());
 const item = (
   taskType = "presenter",
   duration = 30,
@@ -50,7 +51,7 @@ test("routing rejects incompatible modes and allows Plus without an operator gat
     "express",
   );
 });
-test("rates use selected time, bonuses are included and deliberate 30s Express discount is $11", () => {
+test("rates use selected time and the combined total is floored for every route", () => {
   assert.equal(makeQuote([item()]).items[0].unitAmountCents, 289);
   assert.equal(
     makeQuote([item("demo", 25, "scene")]).items[0].unitAmountCents,
@@ -87,7 +88,7 @@ test("multiple purchases discount eligible short videos, with no all-at-once use
   const q = makeQuote([item("presenter", 15), item("demo", 15, "scene")]);
   assert.equal(q.items.length, 2);
   assert.ok(q.items[0].minimumApplied);
-  assert.ok(makeQuote([item("presenter", 5)]).amountCents > 100);
+  assert.ok(makeQuote([item("presenter", 5)]).amountCents >= 100);
 });
 test("compatibility checks actual bonus capacity and purchased resolution and service", () => {
   const a = {
@@ -231,4 +232,151 @@ test("Plus is available for tasks 2–5 and only scene-based short explainers", 
   assert.throws(() =>
     validateOffer({ ...item("explainer", 15, "express"), theme: "presenter" }),
   );
+});
+
+test("whole-purchase rounding follows the merchant examples and preserves whole dollars", () => {
+  for (const [subtotal, expected] of [
+    [1590, 1500],
+    [1320, 1300],
+    [1500, 1500],
+    [1599, 1500],
+    [1600, 1600],
+  ])
+    assert.equal(roundPurchaseCents(subtotal), expected);
+});
+test("two videos are rounded together, never individually, and sub-cent rates are preserved", () => {
+  const q = makeQuote([item("presenter", 83, "presenter", 2)]);
+  assert.equal(q.amountCents, 1500);
+  assert.equal(q.subtotalCents, 1592);
+  assert.equal(q.items[0].quantity, 2);
+  const split = makeQuote([item("presenter", 83), item("presenter", 83)]);
+  assert.equal(split.amountCents, 1500);
+  assert.equal(
+    split.items.reduce((sum, i) => sum + i.lineAmountCents, 0),
+    1500,
+  );
+  assert.equal(makeQuote([item("explainer", 100)]).amountCents, 900);
+  assert.equal(
+    makeQuote([
+      item("showcase", 25, "scene", 2),
+      { ...item("showcase", 25, "scene"), resolution: "720p" },
+    ]).amountCents,
+    2000,
+  );
+});
+test("all model routes and mixed carts have one whole-dollar final total and matching receipt amounts", () => {
+  for (const duration of [10, 15, 20, 25]) {
+    const q = makeQuote([
+      item("presenter", duration, "presenter", 3),
+      item("showcase", duration, "scene", 2),
+      item("showcase", duration, "express"),
+    ]);
+    assert.equal(q.amountCents % 100, 0);
+    assert.equal(
+      q.items.reduce((sum, i) => sum + i.lineAmountCents, 0),
+      q.amountCents,
+    );
+    assert.ok(q.amountCents <= q.subtotalCents!);
+    assert.ok(q.subtotalCents! - q.amountCents < 100);
+  }
+});
+test("Stripe charges exactly the rounded cart total while fulfillment retains every purchased allowance", async () => {
+  const f = fixture();
+  try {
+    await seedUser(f.db);
+    const q = makeQuote([
+      item("presenter", 83, "presenter", 2),
+      item("demo", 25, "scene", 3),
+    ]);
+    await f.db
+      .prepare(
+        "INSERT INTO quotes(id,user_id,snapshot_json,amount_cents,expires_at,created_at) VALUES('rounded-quote','user-a',?,?,?,?)",
+      )
+      .bind(JSON.stringify(q), q.amountCents, q.expiresAt, Date.now())
+      .run();
+    let captured: URLSearchParams | undefined;
+    mock.method(globalThis, "fetch", async (value: any, init: any) => {
+      assert.ok(
+        String(value).startsWith("https://api.stripe.com/v1/checkout/sessions"),
+      );
+      captured = new URLSearchParams(String(init.body));
+      return Response.json({
+        id: "cs_rounded_fixture",
+        object: "checkout.session",
+        url: "https://checkout.stripe.com/fixture",
+        status: "open",
+      });
+    });
+    const env = {
+      ...f.env,
+      CHECKOUT_ENABLED: "true",
+      GENERATION_ENABLED: "true",
+      OPENROUTER_API_KEY: "fixture",
+      STRIPE_SECRET_KEY: "sk_test_fixture_only",
+      STRIPE_WEBHOOK_SECRET: "fixture",
+    };
+    const response = await checkout(
+      new Request("https://ahab.example/api/checkout", {
+        method: "POST",
+        body: JSON.stringify({ quoteId: "rounded-quote" }),
+      }),
+      env,
+      "user-a",
+    );
+    assert.equal(response.status, 200);
+    assert.ok(captured);
+    let total = 0;
+    q.items.forEach((i, index) => {
+      assert.equal(captured!.get(`line_items[${index}][quantity]`), "1");
+      const amount = Number(
+        captured!.get(`line_items[${index}][price_data][unit_amount]`),
+      );
+      assert.equal(amount, i.lineAmountCents);
+      total += amount;
+    });
+    assert.equal(total, q.amountCents);
+    const parent = f.db.row<any>(
+      "SELECT * FROM purchases WHERE parent_id IS NULL",
+    )!;
+    assert.equal(parent.amount_cents, total);
+    const children = f.db.rows<any>(
+      "SELECT * FROM purchases WHERE parent_id IS NOT NULL",
+    );
+    assert.equal(
+      children.reduce((sum, p) => sum + p.amount_cents, 0),
+      total,
+    );
+    assert.deepEqual(
+      f.db
+        .rows<any>("SELECT quantity FROM purchase_items ORDER BY rowid")
+        .map((i) => i.quantity),
+      [2, 3],
+    );
+    await fulfillEvent(env, {
+      id: "evt_rounded_paid",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_rounded_fixture",
+          currency: "usd",
+          amount_total: total,
+          client_reference_id: "user-a",
+          metadata: {
+            purchaseId: parent.id,
+            userId: "user-a",
+            packageId: "cart",
+          },
+          payment_status: "paid",
+        },
+      },
+    });
+    assert.equal(
+      f.db
+        .rows<any>("SELECT * FROM allowances")
+        .reduce((sum, a) => sum + a.videos_remaining, 0),
+      5,
+    );
+  } finally {
+    f.close();
+  }
 });

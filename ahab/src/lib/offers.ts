@@ -1,5 +1,5 @@
 /** Public product rules. Provider names and credentials must never enter this module. */
-export const OFFER_VERSION = 1;
+export const OFFER_VERSION = 2;
 export type TaskType =
   "presenter" | "demo" | "unboxing" | "reaction" | "showcase" | "explainer";
 export type Service = "presenter" | "scene" | "express" | "image";
@@ -73,6 +73,8 @@ export type Quote = {
   version: number;
   items: QuoteItem[];
   amountCents: number;
+  subtotalCents?: number;
+  roundingDiscountCents?: number;
   currency: "usd";
   expiresAt: number;
 };

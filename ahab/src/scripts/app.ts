@@ -616,7 +616,7 @@ async function initializeOffers() {
       cart
         .map(
           (i, index) =>
-            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Plus · " : ""}use separately, no expiry`}${quote ? ` · ${money(quote.items[index].unitAmountCents)} each${quote.items[index].minimumApplied ? " (minimum price)" : ""}` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
+            `<div class="cart-line"><div><strong>${i.quantity} × ${i.service === "image" ? "Image preparation" : `${escape(taskById(i.taskType)?.name)} · ${i.duration}s · ${escape(i.resolution)}`}</strong><small>${i.service === "image" ? "One image operation per allowance" : `${i.service === "express" ? "Plus · " : ""}use separately, no expiry`}${quote ? ` · ${money(quote.items[index].lineAmountCents)} total` : ""}</small></div><button type="button" class="button ghost small" data-remove-cart="${index}">Remove</button></div>`,
         )
         .join("") +
       (quote

@@ -3,7 +3,7 @@ import type { AhabEnv } from "./types";
 import { PACKAGES, packageById } from "./policy";
 import { HttpError, json, readJson, boundedBody } from "./http";
 import { getAvatarVoices } from "./openrouter";
-import { TASKS, type Quote } from "./offers";
+import { TASKS, OFFER_VERSION, type Quote } from "./offers";
 import { expressEnabled } from "./quotes";
 function stripe(env: AhabEnv) {
   if (!env.STRIPE_SECRET_KEY)
@@ -128,6 +128,11 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
   if (!q)
     throw new HttpError(400, "Review your purchase to get a current price.");
   const quote = JSON.parse(q.snapshot_json) as Quote;
+  if (quote.version !== OFFER_VERSION)
+    throw new HttpError(
+      400,
+      "Review your purchase again to receive the current total.",
+    );
   if (quote.items.some((i) => i.service === "image"))
     throw new HttpError(
       400,
@@ -188,16 +193,17 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
         client_reference_id: userId,
         metadata: { purchaseId: id, userId, packageId: "cart" },
         line_items: quote.items.map((i) => ({
-          quantity: i.quantity,
+          // One checkout row represents this configuration's complete allowance quantity.
+          quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: i.unitAmountCents,
+            unit_amount: i.lineAmountCents,
             product_data: {
-              name: `Ahab · ${i.name}`,
+              name: `Ahab · ${i.quantity} × ${i.name}`,
               description:
                 i.service === "image"
                   ? "One image preparation. Use whenever you are ready."
-                  : `One ${i.duration}-second video generation. Includes one optional character-portrait edit. No expiry.`,
+                  : `${i.quantity} separate ${i.duration}-second video allowance${i.quantity === 1 ? "" : "s"}. Each includes one optional character-portrait edit. Use separately; no expiry.`,
             },
           },
         })),
