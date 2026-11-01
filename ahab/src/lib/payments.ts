@@ -48,7 +48,10 @@ export async function readiness(env: AhabEnv) {
     checkoutReason,
   };
 }
+export const CHECKOUT_OPEN_MS = 9 * 60_000;
+
 export async function purchases(env: AhabEnv, userId: string) {
+  await reconcilePurchases(env, userId);
   const [p, a, config] = await Promise.all([
     env.DB.prepare(
       "SELECT id,package_id AS packageId,amount_cents AS amountCents,status,created_at AS createdAt FROM purchases WHERE user_id=? AND parent_id IS NULL ORDER BY created_at DESC",
@@ -141,16 +144,23 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
   if (quote.items.some((i) => i.service === "express") && !expressEnabled(env))
     throw new HttpError(400, "Plus generation is currently unavailable.");
   const existing = await env.DB.prepare(
-    "SELECT id,stripe_session_id FROM purchases WHERE quote_id=?",
+    "SELECT id,stripe_session_id,created_at FROM purchases WHERE quote_id=?",
   )
     .bind(q.id)
-    .first<{ id: string; stripe_session_id: string | null }>();
+    .first<{
+      id: string;
+      stripe_session_id: string | null;
+      created_at: number;
+    }>();
   if (existing?.stripe_session_id) {
     const session = await stripe(env).checkout.sessions.retrieve(
       existing.stripe_session_id,
     );
-    if (session.status === "open" && session.url)
-      return json({ url: session.url });
+    if (session.status === "open" && session.url) {
+      if (Date.now() - existing.created_at < CHECKOUT_OPEN_MS)
+        return json({ url: session.url });
+      await reconcilePurchases(env, userId);
+    }
     throw new HttpError(409, "This checkout has ended. Review a new purchase.");
   }
   if (existing)
@@ -213,7 +223,7 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
         custom_text: {
           submit: {
             message:
-              "One-time purchase. Use allowances separately, whenever you are ready. No voluntary cash refunds; confirmed technical failures restore the affected allowance. Mandatory rights still apply.",
+              "One allowance creates one video; a shorter video still consumes that allowance. Checkout closes after 9 minutes. No voluntary cash refunds; confirmed technical failures restore the affected allowance. Mandatory rights still apply.",
           },
         },
         ...(env.USDC_ENABLED === "true"
@@ -276,7 +286,7 @@ export async function fulfillEvent(
       ? "expired"
       : event.type === "checkout.session.async_payment_failed"
         ? "failed"
-        : "pending";
+        : "processing";
   const statements = [
     env.DB.prepare("INSERT OR IGNORE INTO webhook_events VALUES(?,?,?)").bind(
       event.id,
@@ -321,33 +331,55 @@ export async function fulfillEvent(
   }
   await env.DB.batch(statements);
 }
-export async function reconcilePurchases(env: AhabEnv) {
+export async function reconcilePurchases(env: AhabEnv, userId?: string) {
   if (!env.STRIPE_SECRET_KEY) return;
+  const cutoff = Date.now() - CHECKOUT_OPEN_MS;
+  const scope = userId ? " AND user_id=?" : "";
   await env.DB.prepare(
-    "UPDATE purchases SET status='expired' WHERE parent_id IS NULL AND status='pending' AND stripe_session_id IS NULL AND created_at<?",
+    "UPDATE purchases SET status='expired' WHERE parent_id IS NULL AND status='pending' AND stripe_session_id IS NULL AND created_at<=?" +
+      scope,
   )
-    .bind(Date.now() - 30 * 60000)
+    .bind(...(userId ? [cutoff, userId] : [cutoff]))
     .run();
   const rows = await env.DB.prepare(
-    "SELECT id,stripe_session_id FROM purchases WHERE parent_id IS NULL AND status='pending' AND stripe_session_id IS NOT NULL AND created_at<? LIMIT 20",
+    "SELECT id,stripe_session_id FROM purchases WHERE parent_id IS NULL AND status IN ('pending','processing') AND stripe_session_id IS NOT NULL AND created_at<=?" +
+      scope +
+      " ORDER BY created_at LIMIT 100",
   )
-    .bind(Date.now() - 30 * 60000)
+    .bind(...(userId ? [cutoff, userId] : [cutoff]))
     .all<{ id: string; stripe_session_id: string }>();
+  const client = stripe(env);
   for (const row of rows.results) {
     try {
-      const s = await stripe(env).checkout.sessions.retrieve(
+      let session = await client.checkout.sessions.retrieve(
         row.stripe_session_id,
       );
-      if (s.payment_status === "paid" || s.status === "expired")
-        await fulfillEvent(env, {
-          id: `reconcile-${s.id}-${s.payment_status}`,
-          type:
-            s.payment_status === "paid"
+      if (session.status === "open" && session.payment_status !== "paid") {
+        try {
+          session = await client.checkout.sessions.expire(session.id);
+        } catch {
+          // Payment can complete between retrieval and expiry. Recheck before changing status.
+          session = await client.checkout.sessions.retrieve(session.id);
+        }
+      }
+      const type =
+        session.payment_status === "paid"
+          ? "checkout.session.completed"
+          : session.status === "expired"
+            ? "checkout.session.expired"
+            : session.status === "complete"
               ? "checkout.session.completed"
-              : "checkout.session.expired",
-          data: { object: s },
+              : null;
+      if (type)
+        await fulfillEvent(env, {
+          id: `reconcile-${session.id}-${session.status}-${session.payment_status}`,
+          type,
+          data: { object: session },
         });
-    } catch {}
+    } catch {
+      // Leave the purchase unfulfilled and retry; never guess payment status.
+      console.warn("Purchase reconciliation will retry.");
+    }
   }
 }
 export async function webhook(request: Request, env: AhabEnv) {

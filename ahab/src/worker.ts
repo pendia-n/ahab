@@ -248,7 +248,6 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
 }
 async function scheduled(env: AhabEnv) {
   await expireMedia(env);
-  await reconcilePurchases(env);
   await env.DB.prepare(
     "UPDATE jobs SET status='uncertain',error=?,updated_at=? WHERE status='submitting' AND provider_id IS NULL AND updated_at<?",
   )
@@ -277,10 +276,12 @@ export default {
     return handle(request, env as unknown as Env, ctx);
   },
   scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: AhabEnv,
     ctx: ExecutionContext,
   ) {
-    ctx.waitUntil(scheduled(env));
+    ctx.waitUntil(reconcilePurchases(env));
+    if (new Date(controller.scheduledTime).getUTCMinutes() % 15 === 0)
+      ctx.waitUntil(scheduled(env));
   },
 };

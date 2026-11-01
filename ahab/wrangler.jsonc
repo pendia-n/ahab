@@ -1,9 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "compatibility_date": "2026-10-19",
-  "compatibility_flags": [
-    "global_fetch_strictly_public"
-  ],
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "name": "ahab",
   "main": "./src/worker.ts",
   "account_id": "3b5311e03e628e3ff49cbcdfac1e3dbe",
@@ -18,8 +16,8 @@
   "r2_buckets": [
     {
       "binding": "MEDIA",
-      "bucket_name": "ahab-media"
-    }
+      "bucket_name": "ahab-media",
+    },
   ],
   "workflows": [
     {
@@ -29,9 +27,7 @@
     },
   ],
   "triggers": {
-    "crons": [
-      "*/15 * * * *"
-    ]
+    "crons": ["* * * * *"],
   },
   "vars": {
     "APP_URL": "https://ahab.pendia-community.workers.dev",
@@ -46,7 +42,7 @@
   "observability": {
     "enabled": true,
     "logs": {
-      "invocation_logs": false
+      "invocation_logs": false,
     },
   },
 }

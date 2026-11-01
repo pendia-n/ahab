@@ -2660,3 +2660,78 @@ input[type="number"] {
     width: 100%;
   }
 }
+
+/* Receipt columns remain readable on desktop and become labelled rows on phones. */
+#purchase-history {
+  padding: 8px 24px;
+}
+.purchase-table {
+  font-size: 15px;
+}
+.purchase-table th {
+  padding: 18px 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.purchase-table td {
+  padding: 22px 16px;
+}
+.purchase-table th:first-child {
+  width: 42%;
+}
+.purchase-table td:first-child {
+  white-space: normal;
+}
+.purchase-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.purchase-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  #purchase-history {
+    padding: 0 20px;
+  }
+  .purchase-table,
+  .purchase-table tbody,
+  .purchase-table tr,
+  .purchase-table td {
+    display: block;
+    width: 100%;
+  }
+  .purchase-table thead {
+    display: none;
+  }
+  .purchase-table tr {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .purchase-table tr:last-child {
+    border-bottom: 0;
+  }
+  .purchase-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 8px 0;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+  }
+  .purchase-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: left;
+  }
+}
+
+.purchase-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

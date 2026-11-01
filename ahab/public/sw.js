@@ -1,4 +1,4 @@
-const CACHE = "ahab-public-v9";
+const CACHE = "ahab-public-v10";
 const STATIC = [
   "/offline/",
   "/ahab.svg",

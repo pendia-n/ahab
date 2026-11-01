@@ -536,7 +536,9 @@ const money = (c: number) =>
   );
 const option = (value: string, label: string) =>
   `<option value="${escape(value)}">${escape(label)}</option>`;
+let purchaseRefresh: ReturnType<typeof setTimeout> | undefined;
 async function initializePurchases() {
+  clearTimeout(purchaseRefresh);
   const target = $("#purchase-history");
   if (!target) return;
   try {
@@ -551,12 +553,25 @@ async function initializePurchases() {
       )
       .join("");
     target.innerHTML = data.purchases.length
-      ? `<table><thead><tr><th>Purchase</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>${data.purchases.map((p: any) => `<tr><td>${escape(p.name)}</td><td>${date(p.createdAt)}</td><td>${money(p.amountCents)}</td><td><span class="pill">${escape(p.status)}</span></td></tr>`).join("")}</tbody></table>`
+      ? `<table class="data-table purchase-table"><caption class="sr-only">Purchase history</caption><thead><tr><th scope="col">Purchase</th><th scope="col">Date</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead><tbody>${data.purchases.map((p: any) => `<tr><td data-label="Purchase"><strong>${escape(p.name)}</strong></td><td data-label="Date">${date(p.createdAt)}</td><td data-label="Amount">${money(p.amountCents)}</td><td data-label="Status"><span class="pill ${p.status === "paid" ? "green" : p.status === "pending" || p.status === "processing" ? "amber" : ""}">${escape(({ paid: "Paid", pending: "Awaiting payment", processing: "Payment processing", expired: "Expired · unpaid", failed: "Payment failed" } as Record<string, string>)[p.status] || p.status)}</span></td></tr>`).join("")}</tbody></table>`
       : empty(
           "Your next idea has room here.",
           "Your verified purchases will appear here.",
           false,
         );
+    if (
+      data.purchases.some((p: any) =>
+        ["pending", "processing"].includes(p.status),
+      )
+    )
+      purchaseRefresh = setTimeout(() => {
+        if (!document.hidden) void initializePurchases();
+        else
+          purchaseRefresh = setTimeout(
+            () => void initializePurchases(),
+            30_000,
+          );
+      }, 30_000);
     const state = new URLSearchParams(location.search).get("checkout");
     if (state) {
       const n = $("#purchase-message")!;
@@ -647,7 +662,7 @@ async function initializeOffers() {
     if (old === "express" && config.expressEnabled && s === "scene")
       delivery.value = old;
     $("#offer-duration-note")!.textContent =
-      "Each allowance makes one video. Use your allowances separately, whenever you are ready.";
+      "One allowance creates one video. Choosing a shorter video still consumes that allowance.";
   };
   form.addEventListener("change", update);
   duration.addEventListener("input", () => {
