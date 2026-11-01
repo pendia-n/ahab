@@ -45,26 +45,18 @@ export function makeQuote(
   const inputs = raw.map((v) => validateOffer(v, express));
   const count = inputs.reduce((s, v) => s + v.quantity, 0);
   if (count > 50) throw new Error("Buy up to 50 allowances at a time.");
-  const eligible = inputs
-    .filter((v) => v.service !== "image" && v.duration <= 30)
-    .reduce((s, v) => s + v.quantity, 0);
   const items = inputs.map((v) => {
     const generated =
       v.service === "image"
         ? 0
         : generatedDuration(v.taskType, v.duration, v.service);
-    const bulk = v.service !== "image" && v.duration <= 30 && eligible >= 2;
+    const bulk = v.service !== "image" && v.quantity >= 2;
     const rates = v.service === "image" ? null : RATES[v.service];
     // Rates use 1/10000 USD. Keep sub-cent precision until the whole cart is priced.
     const baseSubcents = rates
       ? v.duration * rates[bulk ? "multiple" : "single"]
       : 10000;
-    const minimum = Math.ceil(
-      ((plannedCostCents(v.service, generated, "1080p") + 81 + 30 / count) *
-        10000) /
-        9710,
-    );
-    const unitSubcents = Math.max(baseSubcents, minimum * 100);
+    const unitSubcents = baseSubcents;
     const unit = Math.round(unitSubcents / 100);
     return {
       ...v,
@@ -72,7 +64,7 @@ export function makeQuote(
       unitAmountCents: unit,
       lineAmountCents: unit * v.quantity,
       pricingSubcents: unitSubcents * v.quantity,
-      minimumApplied: minimum * 100 > baseSubcents,
+      minimumApplied: false,
       name:
         v.service === "image"
           ? "Image preparation"
@@ -84,6 +76,10 @@ export function makeQuote(
     0,
   );
   const amountCents = roundPurchaseCents(subtotalSubcents / 100);
+  if (amountCents < 100)
+    throw new Error(
+      "This purchase rounds to $0. Add another allowance or choose a longer duration before checkout.",
+    );
   // Distribute the final charge across receipt rows in cents. Never floor individual rows.
   const allocations = items.map((item) =>
     Math.floor((item.pricingSubcents * amountCents) / subtotalSubcents),

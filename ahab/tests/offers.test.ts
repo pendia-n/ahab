@@ -52,10 +52,10 @@ test("routing rejects incompatible modes and allows Plus without an operator gat
   );
 });
 test("rates use selected time and the combined total is floored for every route", () => {
-  assert.equal(makeQuote([item()]).items[0].unitAmountCents, 289);
+  assert.equal(makeQuote([item()]).items[0].unitAmountCents, 288);
   assert.equal(
     makeQuote([item("demo", 25, "scene")]).items[0].unitAmountCents,
-    755,
+    682,
   );
   const q = makeQuote([item("explainer", 30, "express")], true);
   assert.equal(q.amountCents, 1100);
@@ -76,19 +76,20 @@ test("customer quotes expose selected length while keeping internal duration adj
   assert.equal("generatedDuration" in visible.items[0], false);
   assert.equal(visible.amountCents, internal.amountCents);
 });
-test("multiple purchases discount eligible short videos, with no all-at-once use condition", () => {
+test("multiple rates depend only on each selection quantity, without a duration cutoff", () => {
   assert.equal(
     makeQuote([item("presenter", 30, "presenter", 2)]).items[0].unitAmountCents,
     285,
   );
   assert.equal(
     makeQuote([item("presenter", 60, "presenter", 2)]).items[0].unitAmountCents,
-    575,
+    570,
   );
   const q = makeQuote([item("presenter", 15), item("demo", 15, "scene")]);
   assert.equal(q.items.length, 2);
-  assert.ok(q.items[0].minimumApplied);
-  assert.ok(makeQuote([item("presenter", 5)]).amountCents >= 100);
+  assert.equal(q.items[0].minimumApplied, false);
+  assert.equal(q.items[1].unitAmountCents, 409);
+  assert.throws(() => makeQuote([item("presenter", 5)]), /rounds to \$0/);
 });
 test("compatibility checks actual bonus capacity and purchased resolution and service", () => {
   const a = {
@@ -247,7 +248,7 @@ test("whole-purchase rounding follows the merchant examples and preserves whole 
 test("two videos are rounded together, never individually, and sub-cent rates are preserved", () => {
   const q = makeQuote([item("presenter", 83, "presenter", 2)]);
   assert.equal(q.amountCents, 1500);
-  assert.equal(q.subtotalCents, 1592);
+  assert.equal(q.subtotalCents, 1577);
   assert.equal(q.items[0].quantity, 2);
   const split = makeQuote([item("presenter", 83), item("presenter", 83)]);
   assert.equal(split.amountCents, 1500);
@@ -277,7 +278,8 @@ test("all model routes and mixed carts have one whole-dollar final total and mat
       q.amountCents,
     );
     assert.ok(q.amountCents <= q.subtotalCents!);
-    assert.ok(q.subtotalCents! - q.amountCents < 100);
+    // Displayed subtotal is rounded to cents; the charge floors the precise rate sum.
+    assert.ok(q.subtotalCents! - q.amountCents <= 100);
   }
 });
 test("Stripe charges exactly the rounded cart total while fulfillment retains every purchased allowance", async () => {
@@ -379,4 +381,33 @@ test("Stripe charges exactly the rounded cart total while fulfillment retains ev
   } finally {
     f.close();
   }
+});
+
+test("the merchant six-video cart costs $34 with row-specific rates and no minimum override", () => {
+  const q = makeQuote([
+    { ...item("presenter", 45, "presenter", 2), resolution: "720p" },
+    item("showcase", 20, "express", 3),
+    { ...item("reaction", 15, "scene"), resolution: "720p" },
+  ]);
+  assert.equal(q.subtotalCents, 3484);
+  assert.equal(q.amountCents, 3400);
+  assert.deepEqual(
+    q.items.map((i) => i.unitAmountCents),
+    [428, 740, 409],
+  );
+  assert.ok(q.items.every((i) => !i.minimumApplied));
+  assert.equal(
+    q.items.reduce((sum, i) => sum + i.lineAmountCents, 0),
+    3400,
+  );
+});
+test("single selections stay single in a mixed cart and short-video prices are never raised", () => {
+  const q = makeQuote([item("presenter", 30), item("reaction", 15, "scene")]);
+  assert.deepEqual(
+    q.items.map((i) => i.unitAmountCents),
+    [288, 409],
+  );
+  const short = makeQuote([item("presenter", 5, "presenter", 3)]);
+  assert.equal(short.amountCents, 100);
+  assert.equal(short.items[0].unitAmountCents, 48);
 });
