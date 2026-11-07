@@ -89,7 +89,7 @@ test("multiple rates depend only on each selection quantity, without a duration 
   assert.equal(q.items.length, 2);
   assert.equal(q.items[0].minimumApplied, false);
   assert.equal(q.items[1].unitAmountCents, 409);
-  assert.throws(() => makeQuote([item("presenter", 5)]), /rounds to \$0/);
+  assert.equal(makeQuote([item("presenter", 5)]).amountCents, 200);
 });
 test("compatibility checks actual bonus capacity and purchased resolution and service", () => {
   const a = {
@@ -237,6 +237,10 @@ test("Plus is available for tasks 2–5 and only scene-based short explainers", 
 
 test("whole-purchase rounding follows the merchant examples and preserves whole dollars", () => {
   for (const [subtotal, expected] of [
+    [85, 200],
+    [184.4, 200],
+    [287.7, 200],
+    [590, 500],
     [1590, 1500],
     [1320, 1300],
     [1500, 1500],
@@ -401,13 +405,32 @@ test("the merchant six-video cart costs $34 with row-specific rates and no minim
     3400,
   );
 });
-test("single selections stay single in a mixed cart and short-video prices are never raised", () => {
+test("single selections stay single in a mixed cart and the checkout minimum preserves short-video quantities", () => {
   const q = makeQuote([item("presenter", 30), item("reaction", 15, "scene")]);
   assert.deepEqual(
     q.items.map((i) => i.unitAmountCents),
     [288, 409],
   );
   const short = makeQuote([item("presenter", 5, "presenter", 3)]);
-  assert.equal(short.amountCents, 100);
+  assert.equal(short.amountCents, 200);
   assert.equal(short.items[0].unitAmountCents, 48);
+});
+
+test("checkout minimum is monotonic and mixed-cart receipt rows match the charge", () => {
+  for (let duration = 5; duration <= 30; duration++) {
+    const q = makeQuote([item("presenter", duration)]);
+    assert.equal(q.amountCents, 200);
+    assert.equal(q.items[0].quantity, 1);
+    assert.equal(q.roundingDiscountCents! >= 0, true);
+  }
+  const q = makeQuote([item("presenter", 5), item("reaction", 5, "scene")]);
+  assert.equal(q.amountCents, 200);
+  assert.equal(
+    q.items.reduce((sum, i) => sum + i.lineAmountCents, 0),
+    200,
+  );
+  assert.deepEqual(
+    q.items.map((i) => i.quantity),
+    [1, 1],
+  );
 });

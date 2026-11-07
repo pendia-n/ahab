@@ -31,9 +31,9 @@ export function plannedCostCents(
     ? 8
     : Math.ceil((duration * perSecond * 1055) / 1000) + 10;
 }
-/** Merchant policy: round the combined purchase down once to whole USD. */
+/** Merchant policy: round the combined purchase down once to whole USD, with a $2 checkout minimum. */
 export function roundPurchaseCents(subtotalCents: number) {
-  return Math.floor(subtotalCents / 100) * 100;
+  return Math.max(200, Math.floor(subtotalCents / 100) * 100);
 }
 export function makeQuote(
   raw: unknown,
@@ -76,10 +76,6 @@ export function makeQuote(
     0,
   );
   const amountCents = roundPurchaseCents(subtotalSubcents / 100);
-  if (amountCents < 100)
-    throw new Error(
-      "This purchase rounds to $0. Add another allowance or choose a longer duration before checkout.",
-    );
   // Distribute the final charge across receipt rows in cents. Never floor individual rows.
   const allocations = items.map((item) =>
     Math.floor((item.pricingSubcents * amountCents) / subtotalSubcents),
@@ -104,7 +100,8 @@ export function makeQuote(
       lineAmountCents: allocations[i],
     })),
     subtotalCents,
-    roundingDiscountCents: subtotalCents - amountCents,
+    roundingDiscountCents: Math.max(0, subtotalCents - amountCents),
+    minimumAdjustmentCents: Math.max(0, amountCents - subtotalCents),
     amountCents,
     currency: "usd",
     expiresAt: now + 30 * 60000,

@@ -88,7 +88,7 @@ Each selection's own quantity determines its rate. For example, a quantity-two p
 
 Calculate every selection, add the whole purchase together, then round the final combined total down once to whole US dollars. A $15.90 purchase becomes $15. Individual videos are not separately rounded down to whole dollars. A selection of one 30-second presenter video calculates to $2.877 and, if purchased alone, is charged as $2.
 
-A purchase that would round to $0 cannot proceed; the user needs a larger quantity or longer selection. The app does not silently raise the price to a minimum charge.
+Minimum purchase: $2. The app rounds the combined cart down once to whole dollars, then applies this checkout minimum. For example, $0.85 and $1.844 both cost $2; $5.90 costs $5.
 
 ## Payment, failures and purchase history
 
