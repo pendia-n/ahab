@@ -11,6 +11,7 @@ import {
   pollVideo,
   downloadVideo,
   generatePortrait,
+  availableCreditCents,
   OpenRouterError,
 } from "./lib/openrouter";
 import { assetStatement, expireMedia } from "./lib/media";
@@ -19,6 +20,13 @@ import { validateOutput } from "./lib/output-validation";
 const terminal = (j: JobRow) => ["completed", "failed"].includes(j.status);
 const cents = (value: number | null) =>
   value === null ? null : Math.ceil(value * 100);
+async function waitForCredits(env: AhabEnv, id: string) {
+  await env.DB.prepare(
+    "UPDATE jobs SET status='pending_funds',error=NULL,updated_at=? WHERE id=? AND status='submitting' AND provider_id IS NULL",
+  )
+    .bind(Date.now(), id)
+    .run();
+}
 async function uncertain(env: AhabEnv, id: string) {
   await env.DB.prepare(
     "UPDATE jobs SET status='uncertain',error=?,updated_at=? WHERE id=? AND status NOT IN ('completed','failed')",
@@ -59,14 +67,41 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
         const j = await jobById(this.env, id);
         if (!j || terminal(j)) return null;
         if (j.provider_id) return j.provider_id;
+        if (!["queued", "pending_funds"].includes(j.status)) return null;
+        const managementKey = this.env.OPENROUTER_MANAGEMENT_KEY;
+        let available: number | null = null;
+        const checkedSince = Date.now();
+        if (managementKey) {
+          try {
+            available = await availableCreditCents(managementKey);
+          } catch {
+            available = 0;
+          }
+        }
+        // Claim and account for overlapping reservations in one database write.
         const claimed = await this.env.DB.prepare(
-          "UPDATE jobs SET status='submitting',updated_at=? WHERE id=? AND status='queued' RETURNING id",
+          `UPDATE jobs SET status='submitting',error=NULL,updated_at=?
+           WHERE id=? AND status IN ('queued','pending_funds') AND provider_id IS NULL
+           AND (? IS NULL OR estimate_cents + (
+             SELECT COALESCE(SUM(other.estimate_cents),0) FROM jobs other
+             WHERE other.id!=jobs.id AND (
+               other.status='submitting'
+               OR (other.provider_id IS NOT NULL AND other.status NOT IN ('completed','failed'))
+               OR (other.updated_at>=? AND (
+                 other.status='uncertain'
+                 OR (other.status IN ('completed','failed') AND other.actual_cents>0)
+               ))
+             )
+           ) <= ?) RETURNING id`,
         )
-          .bind(Date.now(), id)
+          .bind(Date.now(), id, available, checkedSince, available)
           .first();
         if (!claimed) {
-          if (j.updated_at < Date.now() - 15 * 60000)
-            await uncertain(this.env, id);
+          await this.env.DB.prepare(
+            "UPDATE jobs SET status='pending_funds',error=NULL,updated_at=? WHERE id=? AND status IN ('queued','pending_funds') AND provider_id IS NULL",
+          )
+            .bind(Date.now(), id)
+            .run();
           return null;
         }
         try {
@@ -137,7 +172,13 @@ export class GenerationWorkflow extends WorkflowEntrypoint<
           }
           return result.id;
         } catch (e) {
-          if (e instanceof OpenRouterError && !e.submissionUncertain) {
+          if (
+            e instanceof OpenRouterError &&
+            e.code === "provider_unfunded" &&
+            !e.submissionUncertain
+          ) {
+            await waitForCredits(this.env, id);
+          } else if (e instanceof OpenRouterError && !e.submissionUncertain) {
             await failed(this.env, id, e.message);
           } else await uncertain(this.env, id);
           return null;
@@ -271,6 +312,22 @@ async function scheduled(env: AhabEnv) {
     } catch {}
   }
 }
+async function retryPendingFunding(env: AhabEnv) {
+  const now = Date.now();
+  const rows = await env.DB.prepare(
+    "SELECT id FROM jobs WHERE status='pending_funds' AND provider_id IS NULL AND updated_at<=? ORDER BY updated_at LIMIT 20",
+  )
+    .bind(now - 60000)
+    .all<{ id: string }>();
+  for (const { id } of rows.results) {
+    try {
+      await env.GENERATION.create({
+        id: `funding-${id}-${Math.floor(now / 60000)}`,
+        params: { jobId: id },
+      });
+    } catch {}
+  }
+}
 export default {
   fetch(request: Request, env: AhabEnv, ctx: ExecutionContext) {
     return handle(request, env as unknown as Env, ctx);
@@ -281,6 +338,7 @@ export default {
     ctx: ExecutionContext,
   ) {
     ctx.waitUntil(reconcilePurchases(env));
+    ctx.waitUntil(retryPendingFunding(env));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 15 === 0)
       ctx.waitUntil(scheduled(env));
   },

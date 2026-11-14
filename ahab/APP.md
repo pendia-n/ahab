@@ -45,6 +45,8 @@ One-time Stripe Checkout, inline `price_data`, USD and dynamic payment methods. 
 
 Generation and preparation request keys prevent duplicate paid submissions. Reserve video/image allowance atomically in D1. A queued job survives dispatch failure. Unknown provider acceptance is held for reconciliation without blind resubmission. A successful image remains available if video fails. The existing cost ledger records estimated/actual cost without requiring manually funded D1 balances.
 
+Set the Worker secret `OPENROUTER_MANAGEMENT_KEY` to enable a live account credit check before each video or portrait submission. The Worker reserves capacity for overlapping jobs and leaves jobs pending with their allowance held when credits are low or the check is unavailable. The scheduler retries pending work; confirmed funding rejections also return to pending. Checkout and already submitted jobs do not depend on this check. Studio opens a preview when a watched video finishes, and the video remains in the Library.
+
 ## Accounts and media
 
 Username/password with Worker-compatible PBKDF2, optional hashed eight-character recovery passcode, signed JWT authorization and secure HttpOnly SameSite=Lax cookies lasting 270 days. Every page is session aware; signed-in users are redirected away from sign-in/signup/recovery. Secrets remain deployed Worker secrets and are never returned to clients. Do not read or publish credential files.

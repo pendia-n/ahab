@@ -233,6 +233,22 @@ async function json(response: Response, submitting = false): Promise<unknown> {
   }
 }
 
+export async function availableCreditCents(
+  managementKey: string,
+): Promise<number> {
+  const response = await request("/credits", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${managementKey}` },
+    cache: "no-store",
+  });
+  const data = record(record(await json(response)).data);
+  const credits = cost(data.total_credits);
+  const usage = cost(data.total_usage);
+  if (credits === null || usage === null)
+    throw new OpenRouterError("invalid_response", 502);
+  return Math.max(0, Math.floor((credits - usage) * 100 + 1e-7));
+}
+
 let catalogCache: { expires: number; value: ModelCapabilities } | undefined;
 /** Public model discovery sends no credentials and caches only public metadata. */
 export async function modelCapabilities(): Promise<ModelCapabilities> {

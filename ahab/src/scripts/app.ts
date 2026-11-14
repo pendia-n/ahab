@@ -376,6 +376,7 @@ const empty = (title: string, message: string, action = true) =>
 const statusLabel = (value: string) =>
   ({
     queued: "Queued",
+    pending_funds: "Pending · waiting to start automatically",
     submitting: "Sending to the studio",
     pending: "Waiting to start",
     in_progress: "In the making",
@@ -788,7 +789,23 @@ async function initializeStudio() {
   let key = crypto.randomUUID();
   let imageKey = crypto.randomUUID();
   let preparationKey = crypto.randomUUID();
-  let polling: ReturnType<typeof setTimeout>;
+  const polling = new Map<string, ReturnType<typeof setTimeout>>();
+  const watching = new Set<string>();
+  const resultQueue: string[] = [];
+  const resultDialog = $<HTMLDialogElement>("#generation-result")!;
+  const resultVideo = resultDialog.querySelector("video")!;
+  const showNextResult = () => {
+    if (resultDialog.open || resultQueue.length === 0) return;
+    const url = `/api/media/${encodeURIComponent(resultQueue.shift()!)}`;
+    resultVideo.src = url;
+    $<HTMLAnchorElement>("#result-download")!.href = url + "?download=1";
+    resultDialog.showModal();
+  };
+  resultDialog.addEventListener("close", () => {
+    resultVideo.removeAttribute("src");
+    resultVideo.load();
+    showNextResult();
+  });
   const task = $<HTMLSelectElement>("#task-type")!,
     style = $<HTMLSelectElement>("#studio-style")!,
     duration = $<HTMLInputElement>("#duration")!,
@@ -999,6 +1016,7 @@ async function initializeStudio() {
         "Generation is currently unavailable. Your allowances are safe.";
   };
   const watch = async (id: string) => {
+    polling.delete(id);
     try {
       const { job } = await api<{ job: Job }>(`/api/jobs/${id}`);
       const status = $("#generation-status")!;
@@ -1006,10 +1024,12 @@ async function initializeStudio() {
       status.textContent =
         statusLabel(job.status) + (job.error ? ": " + job.error : "");
       if (job.status === "completed") {
+        watching.delete(id);
         if (job.assetId && job.kind !== "portrait") {
-          status.innerHTML = `<video controls playsinline src="/api/media/${encodeURIComponent(job.assetId)}" style="width:100%"></video><a class="button secondary full" href="/api/media/${encodeURIComponent(job.assetId)}?download=1" download>Download video</a>`;
+          resultQueue.push(job.assetId);
+          showNextResult();
         }
-        await refresh();
+        await refresh().catch(() => {});
         if (job.kind === "portrait" && job.assetId) {
           try {
             const prepared = await preparePortraitAsset(job.assetId);
@@ -1025,13 +1045,37 @@ async function initializeStudio() {
         return;
       }
       if (job.status === "failed" || job.status === "uncertain") {
-        await refresh();
+        watching.delete(id);
+        await refresh().catch(() => {});
         return;
       }
-      polling = setTimeout(() => void watch(id), 5000);
+      const listed = library.jobs.find((entry) => entry.id === id);
+      if (
+        listed &&
+        (listed.status !== job.status || listed.error !== job.error)
+      ) {
+        Object.assign(listed, job);
+        $("#studio-jobs")!.innerHTML = jobsMarkup(library.jobs);
+      }
+      polling.set(
+        id,
+        setTimeout(
+          () => void watch(id),
+          job.status === "pending_funds" ? 15000 : 5000,
+        ),
+      );
     } catch {
-      polling = setTimeout(() => void watch(id), 10000);
+      if (watching.has(id))
+        polling.set(
+          id,
+          setTimeout(() => void watch(id), 10000),
+        );
     }
+  };
+  const startWatching = (id: string) => {
+    if (watching.has(id)) return;
+    watching.add(id);
+    void watch(id);
   };
   try {
     await refresh();
@@ -1059,7 +1103,7 @@ async function initializeStudio() {
     for (const job of library.jobs.filter(
       (j) => !["completed", "failed", "uncertain"].includes(j.status),
     ))
-      void watch(job.id);
+      startWatching(job.id);
   } catch (e) {
     $("#generation-error")!.textContent = showError(e);
   }
@@ -1188,7 +1232,7 @@ async function initializeStudio() {
       imageKey = crypto.randomUUID();
       $("#portrait-status")!.textContent =
         "Preparing your image. Progress appears in your studio.";
-      void watch(r.job.id);
+      startWatching(r.job.id);
       await refresh();
     } catch (e) {
       $("#portrait-status")!.textContent = showError(e);
@@ -1217,7 +1261,7 @@ async function initializeStudio() {
       preparationId = "";
       approved.checked = false;
       $("#generation-error")!.textContent = "";
-      void watch(r.job.id);
+      startWatching(r.job.id);
       await refresh();
     } catch (e) {
       $("#generation-error")!.textContent = showError(e);
@@ -1226,7 +1270,9 @@ async function initializeStudio() {
       render();
     }
   });
-  window.addEventListener("pagehide", () => clearTimeout(polling));
+  window.addEventListener("pagehide", () => {
+    for (const timer of polling.values()) clearTimeout(timer);
+  });
 }
 void initializeLibrary();
 void initializePurchases();

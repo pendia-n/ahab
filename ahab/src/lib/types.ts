@@ -5,6 +5,7 @@ export interface AhabEnv {
   GENERATION: Workflow<{ jobId: string }>;
   AHAB_JWT_SECRET: string;
   OPENROUTER_API_KEY?: string;
+  OPENROUTER_MANAGEMENT_KEY?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   APP_URL: string;
