@@ -91,7 +91,7 @@ export function checkoutParams(
   return {
     mode: "payment",
     client_reference_id: userId,
-    metadata: { purchaseId, userId, packageId: pack.id },
+    metadata: { app: "ahab", purchaseId, userId, packageId: pack.id },
     line_items: [
       {
         quantity: 1,
@@ -201,7 +201,7 @@ export async function checkout(request: Request, env: AhabEnv, userId: string) {
       {
         mode: "payment",
         client_reference_id: userId,
-        metadata: { purchaseId: id, userId, packageId: "cart" },
+        metadata: { app: "ahab", purchaseId: id, userId, packageId: "cart" },
         line_items: quote.items.map((i) => ({
           // One checkout row represents this configuration's complete allowance quantity.
           quantity: 1,
@@ -256,6 +256,7 @@ export async function fulfillEvent(
   if (!allowed.includes(event.type)) return;
   const session = event.data.object,
     meta = session.metadata || {};
+  if (meta.app && meta.app !== "ahab") return;
   const row = await env.DB.prepare("SELECT * FROM purchases WHERE id=?")
     .bind(meta.purchaseId || "")
     .first<{
@@ -265,6 +266,8 @@ export async function fulfillEvent(
       amount_cents: number;
       stripe_session_id: string | null;
     }>();
+  // Untagged older sessions belong here only when they match a local purchase.
+  if (!row && !meta.app) return;
   if (
     !row ||
     session.client_reference_id !== row.user_id ||
